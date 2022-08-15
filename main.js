@@ -6,6 +6,7 @@ let canvasWidth, canvasHeight;
 
 let lastXBlockCount, lastYBlockCount, xBlocks;
 const userDino = {};
+let dinoCount = 0;
 
 async function init(res) {
 	const startTime = perf.now();
@@ -52,10 +53,14 @@ async function init(res) {
 				userID: e.tags['user-id'],
 			};
 
+			if (!userData.color)
+				userData.color = '#' + ((Math.random() * 16777215) | 0).toString(16);
+
 			let dino;
 			if (!(dino = userDino[userData.userID]))
-				dino = userDino[userData.userID] = new Dino(res, userData.displayName, userData.color, Math.random());
+				dino = userDino[userData.userID] = new Dino(0, canvasHeight * 0.1, userData.displayName, userData.color, res, Math.random());
 			dino.say(e.parameters, 5);
+			dinoCount++;
 
 			// // debug
 			// const debugObj = JSON.parse(JSON.stringify(e));
@@ -271,7 +276,7 @@ function Dialog(fontSize, borderSize, font, res) {
 	return {render, setPosition, setBackGroundColor, setText};
 }
 
-function Dino(res, name, initColor, seed) {
+function Dino(initX, initY, name, initColor, res, seed) {
 	const widthCut = 4, offsetX = -2, offsetY = -6;
 	const Random = new RNG(seed);
 	const defaultImage = res['dino_normal'][0];
@@ -284,7 +289,7 @@ function Dino(res, name, initColor, seed) {
 
 	// transform
 	let textureW, textureH, texture,
-		x = canvasWidth * 0.5, y = canvasHeight * 0.5,
+		x = initX, y = initY,
 		vx = 0, vy = 0;
 	let facingNormal = true;
 	// animation state
@@ -519,7 +524,7 @@ function Dino(res, name, initColor, seed) {
 		canvas.fillStyle = 'white';
 
 		canvas.font = '15px Arial';
-		canvas.fillText(`FPS: ${nowFps.toFixed(2)}`, 5, 20);
+		canvas.fillText(`DinoCount: ${dinoCount}, FPS: ${nowFps.toFixed(2)}`, 5, 20);
 
 		drawFrame(res, canvas);
 
