@@ -155,7 +155,6 @@ function Dialog(fontSize, borderSize, font, res) {
 		if (lastHandePos !== originalX - x) {
 			lastHandePos = originalX - x;
 			needRender = true;
-			console.log('c');
 		}
 	}
 
@@ -166,7 +165,6 @@ function Dialog(fontSize, borderSize, font, res) {
 		if (newBgColor !== bgColor) {
 			bgColor = newBgColor;
 			needRender = true;
-			console.log('b');
 		}
 	}
 
@@ -193,7 +191,6 @@ function Dialog(fontSize, borderSize, font, res) {
 
 			showDialog = true;
 			needRender = true;
-			console.log('a');
 		}
 	}
 
@@ -641,9 +638,9 @@ function require(url) {
 			const loadImage = new Promise(resolve => image.onload = () => resolve(image));
 			image.src = URL.createObjectURL(await i.blob());
 			return loadImage;
-		} else if (contentType === 'application/json')
+		} else if (contentType.indexOf('application/json') !== -1)
 			return i.json();
-		else if (contentType === 'application/javascript') {
+		else if (contentType.indexOf('application/javascript') !== -1) {
 			const script = (await i.text())
 				.replace(/\n?module.exports/, `module_${fileName}`)
 				.replace(/\/\/ ?!!EXCLUDE_IN_WEB\r?\n/g, '//')
