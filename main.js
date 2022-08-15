@@ -22,8 +22,8 @@ async function init(res) {
 		: Object.fromEntries(window.location.search.slice(1).split('&').map(i => i.split('=').map(decodeURIComponent)));
 
 	// twitch
-	const {Command} = await require("/backend/messageParser");
-	require('/backend/twitch').then(Twitch => {
+	const {Command} = await require("backend/messageParser");
+	require('backend/twitch').then(Twitch => {
 		if (!token) {
 			Twitch.getAccessToken({
 				clientID: '8z8uiiczsmbkdnfaqjgza8pgy2fpnp',
@@ -149,10 +149,13 @@ function Dialog(fontSize, borderSize, font, res) {
 			x = 0;
 		else if (x + borderWidth + borderSize > canvasWidth)
 			x = canvasWidth - borderWidth - borderSize;
-
-		if ((lastHandePos | 0) !== ((originalX - x) | 0)) {
+		x |= 0;
+		y |= 0;
+		originalX |= 0;
+		if (lastHandePos !== originalX - x) {
 			lastHandePos = originalX - x;
 			needRender = true;
+			console.log('c');
 		}
 	}
 
@@ -163,6 +166,7 @@ function Dialog(fontSize, borderSize, font, res) {
 		if (newBgColor !== bgColor) {
 			bgColor = newBgColor;
 			needRender = true;
+			console.log('b');
 		}
 	}
 
@@ -189,6 +193,7 @@ function Dialog(fontSize, borderSize, font, res) {
 
 			showDialog = true;
 			needRender = true;
+			console.log('a');
 		}
 	}
 
@@ -200,7 +205,6 @@ function Dialog(fontSize, borderSize, font, res) {
 
 		if (!needRender) {
 			canvas.drawImage(dialogCanvas.canvas, x, y);
-			needRender = false;
 			return;
 		}
 		// console.log('update dialog box');
@@ -264,6 +268,7 @@ function Dialog(fontSize, borderSize, font, res) {
 			dialogCanvas.fillText(lines[j], (borderWidth + borderSize - textWidth) / 2, (borderHeight + borderSize - textHeight) / 2 + (j + 1) * fontSize);
 
 		canvas.drawImage(dialogCanvas.canvas, x, y);
+		needRender = false;
 	}
 
 	return {render, setPosition, setBackGroundColor, setText};
