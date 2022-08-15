@@ -1,0 +1,51 @@
+[
+  {
+    "name": "ground",
+    "x": 16,
+    "y": 52,
+    "w": 1184,
+    "h": 16,
+    "pieceW": 32
+  },
+  {
+    "name": "dino",
+    "x": 848,
+    "y": 0,
+    "w": 176,
+    "h": 52,
+    "piece": 4,
+    "mode": ["normal", "xMirror"]
+  },
+  {
+    "name": "msgBoxTop",
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 8,
+    "piece": 3
+  },
+  {
+    "name": "msgBoxMid",
+    "x": 0,
+    "y": 8,
+    "w": 24,
+    "h": 8,
+    "piece": 3
+  },
+  {
+    "name": "msgBoxBtm",
+    "x": 0,
+    "y": 16,
+    "w": 24,
+    "h": 8,
+    "piece": 3
+  },
+  {
+    "name": "msgBoxHdl",
+    "x": 24,
+    "y": 0,
+    "w": 8,
+    "h": 8,
+    "mode": ["normal", "xMirror"]
+  }
+]
