@@ -16,3 +16,13 @@ canvas {
 
 .mainCanvas {
 }
+
+.settingBtn {
+	position: absolute;
+	right: 5px;
+	top: 5px;
+}
+
+.settingBtn > img {
+	height: 30px;
+}

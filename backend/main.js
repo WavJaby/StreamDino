@@ -39,4 +39,4 @@ function onEvent(e) {
 // init
 setOnReady(onReady);
 setOnEvent(onEvent);
-startListen(key);
+startListen(key.accessToken);

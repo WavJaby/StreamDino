@@ -1,6 +1,6 @@
 function RNG(seed) {
 	const key = [];
-	const _seed = cyrb128(mixkey(flatten(seed === undefined ? Date.now() : seed, 3), key));
+	const _seed = cyrb128(mixkey(flatten(seed === undefined ? Math.random() : seed, 3), key));
 	this.a = _seed[0];
 	this.b = _seed[1];
 	this.c = _seed[2];

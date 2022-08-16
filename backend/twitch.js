@@ -35,15 +35,15 @@ function sendMessage(msg) {
 }
 
 /**
- * @param key {{accessToken: String, clientID?: String}}
+ * @param accessToken {String}
  * @return void
  */
-function startListen(key) {
+function startListen(accessToken) {
 	client.on('open', function () {
 		console.log('Client connected');
 
 		client.send('CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands');
-		client.send(`PASS oauth:${key.accessToken}`);
+		client.send(`PASS oauth:${accessToken}`);
 		client.send(`NICK ${username}`);
 	});
 
@@ -80,7 +80,7 @@ function startListen(key) {
 function getAccessToken(option) {
 	let authUrl = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${option.clientID}&scope=${encodeURIComponent(option.scopes.join(' '))}&redirect_uri=${encodeURIComponent(option.redirectUri)}`;
 	if (option.state)
-		authUrl += `&state=${option.state}`;
+		authUrl += `&state=${encodeURIComponent(option.state)}`;
 
 	// for web
 	if (window) {

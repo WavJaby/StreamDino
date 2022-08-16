@@ -8,80 +8,127 @@ let lastXBlockCount, lastYBlockCount, xBlocks;
 const userDino = {};
 let dinoCount = 0;
 
-async function init(res) {
-	const startTime = perf.now();
-	await loadImageSlice(res, 'res/dino.png');
-	console.log(`Assets load in: ${(perf.now() - startTime).toFixed(2)}ms`);
-
-	// get access token
-	const token = window.location.hash.length === 0
+async function initVariable(res, stateData, Twitch) {
+	// get token data
+	let hashString = window.location.hash.length === 0
 		? null
 		: Object.fromEntries(window.location.hash.slice(1).split('&').map(i => i.split('=').map(decodeURIComponent)));
-	// get state
-	let state = window.location.search.length === 0
-		? null
-		: Object.fromEntries(window.location.search.slice(1).split('&').map(i => i.split('=').map(decodeURIComponent)));
+	window.location.hash = '';
 
-	// if settings not set yet
-	if ((state === null || !state.joinChannel) && token === null) {
-		window.open('settings.html', '_self');
-		return;
+	// get state
+	const queryString = window.location.search.length === 0
+		? null
+		: window.location.search.slice(1);
+
+	// if token data not given
+	if(!hashString) {
+		hashString = localStorage.getItem('tokenData');
+		if (hashString) {
+			hashString = JSON.parse(hashString);
+			// validating token
+			const validate = await fetch('https://id.twitch.tv/oauth2/validate', {headers: {Authorization: `OAuth ${hashString.access_token}`}})
+				.then(i => i.ok ? i.json() : null);
+			// is valid
+			if (validate) {
+				// change settings
+				if (queryString)
+					hashString.state = queryString;
+			}
+			// is not valid
+			else
+				hashString = null;
+		}
 	}
 
-	// twitch
-	const {Command} = await require('backend/messageParser');
-	require('backend/twitch').then(Twitch => {
-		if (!token) {
-			Twitch.getAccessToken({
-				clientID: '8z8uiiczsmbkdnfaqjgza8pgy2fpnp',
-				redirectUri: window.location.origin + window.location.pathname,
-				scopes: [
-					'chat:read',
-				],
-				state: state === null ? null : JSON.stringify(state)
-			})
-			return;
-		}
-		state = JSON.parse(token.state);
-		const usersData = {};
+	// no state given and token data not valid
+	if (!hashString && !queryString) {
+		window.open('settings.html', '_self');
+		return null;
+	}
 
-		function onReady() {
-			// console.log(e);
-			Twitch.sendMessage(`JOIN #${state.joinChannel}`);
-		}
+	// if no token data
+	if (!hashString) {
+		Twitch.getAccessToken({
+			clientID: '8z8uiiczsmbkdnfaqjgza8pgy2fpnp',
+			redirectUri: window.location.origin + window.location.pathname,
+			scopes: [
+				'chat:read',
+			],
+			state: queryString
+		})
+		return null;
+	}
 
-		function onEvent(e) {
-			if (e.command.type !== Command.PRIVMSG) return;
+	// read and store token data
+	localStorage.setItem('tokenData', JSON.stringify(hashString));
+	stateData.accessToken = hashString.access_token;
+	stateData.settings = Object.fromEntries(hashString.state.split('&').map(i => i.split('=').map(decodeURIComponent)));
+}
 
-			const userData = usersData[e.source.nick] = {
-				color: e.tags.color,
-				displayName: e.tags['display-name'],
-				userID: e.tags['user-id'],
-			};
+/**
+ * Twitch listener
+ * @param res
+ * @param Twitch
+ * @param stateData
+ * @param Command
+ */
+function linkTwitch(res, stateData, Twitch, Command) {
+	const usersData = {};
+	const settings = stateData.settings;
+	console.log(settings);
 
-			if (!userData.color)
-				userData.color = '#' + ((Math.random() * 16777215) | 0).toString(16);
+	function onReady() {
+		Twitch.sendMessage(`JOIN #${settings.joinChannel}`);
+	}
 
-			let dino;
-			if (!(dino = userDino[userData.userID]))
-				dino = userDino[userData.userID] = new Dino(0, canvasHeight * 0.1, userData.displayName, userData.color, res, Math.random());
-			dino.say(e.parameters, 5);
+	function onEvent(e) {
+		if (e.command.type !== Command.PRIVMSG) return;
+
+		const userData = usersData[e.source.nick] = {
+			color: e.tags.color,
+			displayName: e.tags['display-name'],
+			userID: e.tags['user-id'],
+		};
+
+		// give random color if user don't have
+		if (!userData.color)
+			userData.color = '#' + ((Math.random() * 0xFFFFFF) | 0).toString(16);
+
+		// create Dino
+		let dino;
+		if (!(dino = userDino[userData.userID])) {
 			dinoCount++;
-
-			// // debug
-			// const debugObj = JSON.parse(JSON.stringify(e));
-			// for (const key in Command)
-			// 	if (Command[key] === debugObj.command.type) {
-			// 		debugObj.command.type = key;
-			// 		break;
-			// 	}
-			// console.log(debugObj);
+			const dinoScale = (Math.random() * settings.maxDinoScale + 1) | 0;
+			dino = userDino[userData.userID] = new Dino(0, canvasHeight * 0.1, dinoScale, userData.displayName, userData.color, res, Math.random());
 		}
+		dino.say(e.parameters, 5);
 
-		Twitch.setOnReady(onReady);
-		Twitch.setOnEvent(onEvent);
-		Twitch.startListen({accessToken: token.access_token});
-	});
+		// // debug
+		// const debugObj = JSON.parse(JSON.stringify(e));
+		// for (const key in Command)
+		// 	if (Command[key] === debugObj.command.type) {
+		// 		debugObj.command.type = key;
+		// 		break;
+		// 	}
+		// console.log(debugObj);
+	}
+
+	Twitch.setOnReady(onReady);
+	Twitch.setOnEvent(onEvent);
+	Twitch.startListen(stateData.accessToken);
+}
+
+async function initResource(res) {
+	const startTime = perf.now();
+	await loadImageSlice(res, 'res/dino.png');
+	const settingBtn = document.createElement('a');
+	settingBtn.className = 'settingBtn';
+	settingBtn.href = './settings.html';
+	const settingIcon = await require('res/setting_icon.svg');
+	settingBtn.appendChild(settingIcon);
+	document.body.appendChild(settingBtn);
+
+	console.log(`Assets load in: ${(perf.now() - startTime).toFixed(2)}ms`);
 }
 
 function drawFrame(res, canvas) {
@@ -108,7 +155,6 @@ function drawFrame(res, canvas) {
 		const height = piece.height * blockScale;
 		canvas.drawImage(piece, 0, 0, piece.width, piece.height, width * i, canvas.canvas.height - height, width, height);
 	}
-
 
 	if (frameCount > nowFps * 1) {
 		for (const i of Object.values(userDino)) {
@@ -206,14 +252,16 @@ function Dialog(fontSize, borderSize, font, res) {
 	}
 
 	/**
+	 * Render dialog
 	 * @param canvas {CanvasRenderingContext2D}
+	 * @return [x:number, y:number]|null
 	 */
 	function render(canvas) {
-		if (!showDialog) return;
+		if (!showDialog) return null;
 
 		if (!needRender) {
 			canvas.drawImage(dialogCanvas.canvas, x, y);
-			return;
+			return [x, y];
 		}
 		// console.log('update dialog box');
 
@@ -277,16 +325,16 @@ function Dialog(fontSize, borderSize, font, res) {
 
 		canvas.drawImage(dialogCanvas.canvas, x, y);
 		needRender = false;
+		return [x, y];
 	}
 
 	return {render, setPosition, setBackGroundColor, setText};
 }
 
-function Dino(initX, initY, name, initColor, res, seed) {
+function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 	const widthCut = 4, offsetX = -2, offsetY = -6;
 	const Random = new RNG(seed);
 	const defaultImage = res['dino_normal'][0];
-	const dinoScale = Random.nextRange(1, 2);
 	const speed = 10 * dinoScale;
 	const dinoCanvas = createCanvas(defaultImage.width * dinoScale, defaultImage.height * dinoScale);
 	const dialog = new Dialog(20, 16, 'Arial', res);
@@ -485,13 +533,16 @@ function Dino(initX, initY, name, initColor, res, seed) {
 			dialog.setText(null);
 		}
 		const finalY = canvasHeight - textureH - 1 - (y + offsetY * dinoScale);
-		dialog.setPosition(x + (facingNormal ? 35 : -10), finalY - nameFontSize);
-		dialog.render(canvas);
+		dialog.setPosition(x + (facingNormal ? 35 : -10), finalY);
+		const location = dialog.render(canvas);
 
 		// name
 		canvas.fillStyle = 'white';
 		canvas.font = nameFont;
-		canvas.fillText(name, (x + offsetX * dinoScale) + (textureW - nameWidth) * 0.5, finalY);
+		if (location === null)
+			canvas.fillText(name, (x + offsetX * dinoScale) + (textureW - nameWidth) * 0.5, finalY);
+		else
+			canvas.fillText(name, location[0], location[1]);
 
 		canvas.drawImage(dinoCanvas.canvas, 0, 0, textureW, textureH, x + offsetX * dinoScale, finalY, textureW, textureH);
 	}
@@ -507,22 +558,29 @@ function Dino(initX, initY, name, initColor, res, seed) {
 (async function () {
 	// init canvas
 	const canvasEle = document.createElement('canvas');
+	canvasEle.className = 'mainCanvas';
+	const canvas = canvasEle.getContext('2d');
 	window.onload = function () {
 		document.body.appendChild(canvasEle);
 	}
-	canvasEle.className = 'mainCanvas';
-	const canvas = canvasEle.getContext('2d');
-	resizeCanvas();
 
-	// rendering settings
+	// import
+	const Twitch = await require('backend/twitch');
+	const {Command} = await require('backend/messageParser');
+	const res = {};
+	const stateData = {};
+	// get state, token, settings
+	await initVariable(res, stateData, Twitch);
+	linkTwitch(res, stateData, Twitch, Command);
+
+	// init
 	frameCount = 0;
 	nowFps = 0;
 	let lastFrameTime = perf.now();
 	const fps = new Float32Array(4);
-
-	// init and load resource
-	const res = {};
-	await init(res);
+	// load resource
+	await initResource(res);
+	resizeCanvas();
 	renderFrame();
 
 	function renderFrame() {
