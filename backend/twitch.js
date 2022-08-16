@@ -9,10 +9,13 @@ const https = require('https');
 // !!EXCLUDE_IN_WEB
 const {parse: urlPars} = require('url');
 
-const client = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
-
-const username = 'WavJaby\'s_bot';
-
+// client data
+const endpointURL = 'wss://irc-ws.chat.twitch.tv:443';
+let client;
+let token;
+let retryTimer;
+let timeout;
+const username = 'WavJaby\'s_Bot';
 // event listener
 let onReady = null, onEvent = null;
 
@@ -35,46 +38,79 @@ function sendMessage(msg) {
 }
 
 /**
- * @param accessToken {String}
+ * @param accessToken {string}
+ * @param timeoutTime {number}
  * @return void
  */
-function startListen(accessToken) {
-	client.on('open', function () {
-		console.log('Client connected');
-
-		client.send('CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands');
-		client.send(`PASS oauth:${accessToken}`);
-		client.send(`NICK ${username}`);
-	});
-
-	client.on('close', function () {
-		console.log('Client closed');
-	});
-
-	client.on('message', function (data) {
-		data = data.data ? data.data : data.toString();
-		if (data.endsWith('\r\n'))
-			data = data.slice(0, data.length - 2);
-		data = data.split('\r\n');
-		for (const message of data) {
-			console.log(`"${message}"`);
-			const event = parseMessage(message);
-			if (event.command.type === Command.LOGIN) {
-				console.log('Login successful');
-				if (onReady) onReady(event);
-			} else if (event.command.type === Command.PING)
-				client.send('PONG ' + event.parameters);
-			else if (event.command.type === Command.NOTICE) {
-				console.log(`Twitch notice from channel "${event.command.channel}", message: ${event.parameters}`);
-			} else if (event.command.type < 1000) {
-				if (onEvent) onEvent(event);
-			}
+function startListen(accessToken, timeoutTime) {
+	if (accessToken)
+		token = accessToken;
+	if (timeoutTime)
+		timeout = timeoutTime;
+	// check if connected
+	retryTimer = setInterval(() => {
+		if (client)
+			client.close();
+		else {
+			console.warn('connect failed, retrying...');
+			connectToTwitch(accessToken, retryTimer);
 		}
-	});
+	}, timeout);
+	connectToTwitch(accessToken, retryTimer);
+}
+
+function connectToTwitch() {
+	client = new WebSocket(endpointURL);
+	client.on('open', onOpen);
+	client.on('close', onClose);
+	client.on('message', onMessage);
+}
+
+function onOpen() {
+	console.log('Client connected');
+
+	client.send('CAP REQ :twitch.tv/membership twitch.tv/tags twitch.tv/commands');
+	client.send(`PASS oauth:${token}`);
+	client.send(`NICK ${username}`);
+	// stop timer
+	clearInterval(retryTimer);
+}
+
+function onClose() {
+	console.log('Client closed');
+	client.removeEventListener('open', onOpen);
+	client.removeEventListener('close', onClose);
+	client.removeEventListener('message', onMessage);
+	client = null;
+
+	// reconnect
+	console.log(`Reconnect in ${5}sec`);
+	setTimeout(startListen, 5);
+}
+
+function onMessage(data) {
+	data = data.data ? data.data : data.toString();
+	if (data.endsWith('\r\n'))
+		data = data.slice(0, data.length - 2);
+	data = data.split('\r\n');
+	for (const message of data) {
+		// console.log(`"${message}"`);
+		const event = parseMessage(message);
+		if (event.command.type === Command.LOGIN) {
+			console.log('Login successful');
+			if (onReady) onReady(event);
+		} else if (event.command.type === Command.PING)
+			client.send('PONG ' + event.parameters);
+		else if (event.command.type === Command.NOTICE) {
+			console.log(`Twitch notice from channel "${event.command.channel}", message: ${event.parameters}`);
+		} else if (event.command.type < 1000) {
+			if (onEvent) onEvent(event);
+		}
+	}
 }
 
 /**
- * @param option {{clientID:String, scopes:[String], redirectUri: String, [state]: String}}
+ * @param option {{clientID:string, scopes:[string], redirectUri: string, [state]: string}}
  * @return {Promise<unknown> | null}
  */
 function getAccessToken(option) {

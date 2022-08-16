@@ -7,14 +7,17 @@ class Command {
 	static LOGIN = 0;
 	static JOIN = 1;
 	static PART = 2;
-	static NOTICE = 3;
-	static CLEARCHAT = 4;
-	static HOSTTARGET = 5;
-	static PRIVMSG = 6;
-	static PING = 7;
-	static CAP = 8;
-	static USERINCHANNEL = 9;
-	static RECONNECT = 10;
+	static PING = 3;
+	static CAP = 4;
+	static RECONNECT = 5;
+
+	// action
+	static NOTICE = 10;
+	static USERNOTICE = 11;
+	static CLEARCHAT = 12;
+	static HOSTTARGET = 13;
+	static PRIVMSG = 14;
+	static USERINCHANNEL = 15;
 
 	// state
 	static GLOBALUSERSTATE = 100;
@@ -203,6 +206,7 @@ function parseCommand(rawCommandComponent) {
 		case 'JOIN':
 		case 'PART':
 		case 'NOTICE':
+		case 'USERNOTICE':
 		case 'CLEARCHAT':
 		case 'HOSTTARGET':
 		case 'PRIVMSG':

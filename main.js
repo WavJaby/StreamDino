@@ -6,6 +6,7 @@ let canvasWidth, canvasHeight;
 
 let lastXBlockCount, lastYBlockCount, xBlocks;
 const userDino = {};
+let order = [];
 let dinoCount = 0;
 
 async function initVariable(res, stateData, Twitch) {
@@ -21,7 +22,7 @@ async function initVariable(res, stateData, Twitch) {
 		: window.location.search.slice(1);
 
 	// if token data not given
-	if(!hashString) {
+	if (!hashString) {
 		hashString = localStorage.getItem('tokenData');
 		if (hashString) {
 			hashString = JSON.parse(hashString);
@@ -97,11 +98,16 @@ function linkTwitch(res, stateData, Twitch, Command) {
 		// create Dino
 		let dino;
 		if (!(dino = userDino[userData.userID])) {
-			dinoCount++;
 			const dinoScale = (Math.random() * settings.maxDinoScale + 1) | 0;
-			dino = userDino[userData.userID] = new Dino(0, canvasHeight * 0.1, dinoScale, userData.displayName, userData.color, res, Math.random());
+			dino = userDino[userData.userID] = new Dino(Math.random() * canvasWidth, canvasHeight * 0.1, dinoScale, userData.displayName, userData.color, res, Math.random());
+			dino.id = dinoCount++;
+			dino.lastPos = -1;
 		}
 		dino.say(e.parameters, 5);
+		if (dino.lastPos !== -1)
+			order[dino.lastPos] = null;
+		dino.lastPos = order.length;
+		order.push(dino);
 
 		// // debug
 		// const debugObj = JSON.parse(JSON.stringify(e));
@@ -115,7 +121,7 @@ function linkTwitch(res, stateData, Twitch, Command) {
 
 	Twitch.setOnReady(onReady);
 	Twitch.setOnEvent(onEvent);
-	Twitch.startListen(stateData.accessToken);
+	Twitch.startListen(stateData.accessToken, 1000);
 }
 
 async function initResource(res) {
@@ -156,11 +162,16 @@ function drawFrame(res, canvas) {
 		canvas.drawImage(piece, 0, 0, piece.width, piece.height, width * i, canvas.canvas.height - height, width, height);
 	}
 
-	if (frameCount > nowFps * 1) {
-		for (const i of Object.values(userDino)) {
-			i.render(canvas);
-		}
+	// render dino
+	const newOrder = new Array(dinoCount);
+	let j = 0;
+	for (let i = 0; i < order.length; i++) {
+		if (order[i] === null || order[i] === undefined)
+			continue;
+		order[i].render(canvas);
+		newOrder[j++] = order[i];
 	}
+	order = newOrder;
 }
 
 
@@ -182,13 +193,18 @@ function Dialog(fontSize, borderSize, font, res) {
 	let lastHandePos, originalX, x, y;
 	let needRender = true;
 	let showDialog = false;
+	let handleFacing = true;
 
 	/**
-	 * @param newX {Number}
-	 * @param newY {Number}
+	 * @param newX {number}
+	 * @param newY {number}
+	 * @param facing {boolean}
 	 */
-	function setPosition(newX, newY) {
-		originalX = x = newX;
+	function setPosition(newX, newY, facing) {
+		if (handleFacing !== facing)
+			needRender = true;
+		handleFacing = facing;
+		originalX = x = newX - (facing ? 0 : borderSize);
 		y = newY;
 
 		// keep handle in bound
@@ -216,7 +232,7 @@ function Dialog(fontSize, borderSize, font, res) {
 	}
 
 	/**
-	 * @param newBgColor {Number}
+	 * @param newBgColor {number}
 	 */
 	function setBackGroundColor(newBgColor) {
 		if (newBgColor !== bgColor) {
@@ -285,7 +301,7 @@ function Dialog(fontSize, borderSize, font, res) {
 		// handle
 		const offsetX = originalX - x;
 		dialogCanvas.clearRect(offsetX, borderHeight, borderSize, borderSize);
-		dialogCanvas.drawImage((offsetX > borderWidth * 0.5) ? msgBoxHdlMir : msgBoxHdl, offsetX, borderHeight, borderSize, borderSize);
+		dialogCanvas.drawImage(handleFacing ? msgBoxHdl : msgBoxHdlMir, offsetX, borderHeight, borderSize, borderSize);
 
 
 		// fill background
@@ -332,17 +348,17 @@ function Dialog(fontSize, borderSize, font, res) {
 }
 
 function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
-	const widthCut = 4, offsetX = -2, offsetY = -6;
+	const cullWidth = 4, cullXLeft = -2, cullYBottom = -5, cullYTop = -4;
 	const Random = new RNG(seed);
-	const defaultImage = res['dino_normal'][0];
 	const speed = 10 * dinoScale;
-	const dinoCanvas = createCanvas(defaultImage.width * dinoScale, defaultImage.height * dinoScale);
 	const dialog = new Dialog(20, 16, 'Arial', res);
 
 	const nameFontSize = 15, nameFont = `${nameFontSize}px Arial`, nameWidth = getTextWidth(name, nameFont);
 
+	// for render
+	let dinoRes = [], dinoCanvas;
 	// transform
-	let textureW, textureH, texture,
+	let textureW, textureH,
 		x = initX, y = initY,
 		vx = 0, vy = 0;
 	let facingNormal = true;
@@ -359,6 +375,31 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 	function setDinoColor(colorHex) {
 		dinoColor = parseInt(colorHex.slice(1), 16);
 		dialog.setBackGroundColor(dinoColor);
+		initDinoRes();
+	}
+
+	function initDinoRes() {
+		// render res
+		const dinoNormal = res['dino_normal'];
+		const dinoMirror = res['dino_xMirror'];
+		dinoRes = new Array(dinoNormal.length + dinoMirror.length);
+		for (let i = 0; i < dinoRes.length; i++) {
+			const cache = i < dinoNormal.length ? dinoNormal[i] : dinoMirror[i - dinoNormal.length];
+			const cacheCanvas = dinoRes[i] = createCanvas(cache.width, cache.height);
+			cacheCanvas.drawImage(cache, 0, 0, cache.width, cache.height, 0, 0, cache.width, cache.height);
+
+			// change dino color
+			const imgData = cacheCanvas.getImageData(0, 0, cache.width, cache.height);
+			for (let i = 0; i < imgData.data.length; i += 4) {
+				if (imgData.data[i + 3] === 0 || imgData.data[i] > 0 || imgData.data[i + 1] > 0 || imgData.data[i + 1] > 0)
+					continue;
+				imgData.data[i] = (dinoColor & 0xFF0000) >> 16;
+				imgData.data[i + 1] = (dinoColor & 0xFF00) >> 8;
+				imgData.data[i + 2] = dinoColor & 0xFF;
+			}
+			cacheCanvas.putImageData(imgData, 0, 0);
+		}
+		// console.log('update dino state');
 	}
 
 	function say(newText, showSec) {
@@ -376,24 +417,10 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 	}
 
 	function setState(index) {
-		const state = res[facingNormal ? 'dino_normal' : 'dino_xMirror'][index];
-		textureW = state.width * dinoScale;
-		textureH = state.height * dinoScale;
-		texture = state;
-		dinoCanvas.clearRect(0, 0, textureW, textureH);
-		dinoCanvas.drawImage(texture, 0, 0, state.width, state.height, 0, 0, textureW, textureH);
-
-		// change dino color
-		const imgData = dinoCanvas.getImageData(0, 0, textureW, textureH);
-		for (let i = 0; i < imgData.data.length; i += 4) {
-			if (imgData.data[i + 3] === 0 || imgData.data[i] > 0 || imgData.data[i + 1] > 0 || imgData.data[i + 1] > 0)
-				continue;
-			imgData.data[i] = (dinoColor & 0xFF0000) >> 16;
-			imgData.data[i + 1] = (dinoColor & 0xFF00) >> 8;
-			imgData.data[i + 2] = dinoColor & 0xFF;
-		}
-		// console.log('update dino state');
-		dinoCanvas.putImageData(imgData, 0, 0);
+		const state = dinoRes[facingNormal ? index : (4 + index)];
+		dinoCanvas = state.canvas;
+		textureW = dinoCanvas.width * dinoScale;
+		textureH = dinoCanvas.height * dinoScale;
 	}
 
 	/**
@@ -401,7 +428,7 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 	 */
 	function render(canvas) {
 		// constant move animation time
-		moveChangeDelay = nowFps * 0.5;
+		moveChangeDelay = nowFps * 0.3;
 		const dt = nowFps > 0 ? 1 / nowFps : 0.0001;
 		const gravity = 9.81;
 		const scale = 150;
@@ -422,8 +449,8 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 			vx = 0;
 			lastState = 2;
 			setState(0);
-		} else if (x > canvasWidth - textureW + widthCut * dinoScale) {
-			x = canvasWidth - textureW + widthCut * dinoScale;
+		} else if (x > canvasWidth - textureW + cullWidth * dinoScale) {
+			x = canvasWidth - textureW + cullWidth * dinoScale;
 			// stop moving
 			vx = 0;
 			lastState = 1;
@@ -521,30 +548,31 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 				}
 			}
 		}
-		// still at moving animate frame
+		// reset if still at moving animate frame
 		else if (moveChangeState > 0) {
 			moveChangeState = 0;
 			setState(0);
 		}
 
-		// dialog
+		const finalY = canvasHeight - textureH - 1 - (y + (cullYBottom + cullYTop) * dinoScale);
+		// render dino
+		canvas.drawImage(dinoCanvas, 0, 0, dinoCanvas.width, dinoCanvas.height, x + cullXLeft * dinoScale, finalY + cullYTop * dinoScale, textureW, textureH);
+
+		// render dialog
 		if (dialogCloseDelay !== -1 && frameCount - lastDialogFrame > dialogCloseDelay) {
 			dialogCloseDelay = -1;
 			dialog.setText(null);
 		}
-		const finalY = canvasHeight - textureH - 1 - (y + offsetY * dinoScale);
-		dialog.setPosition(x + (facingNormal ? 35 : -10), finalY);
+		dialog.setPosition(x + (facingNormal ? (textureW - cullWidth * dinoScale) : 0), finalY, facingNormal);
 		const location = dialog.render(canvas);
 
-		// name
+		// render name
 		canvas.fillStyle = 'white';
 		canvas.font = nameFont;
 		if (location === null)
-			canvas.fillText(name, (x + offsetX * dinoScale) + (textureW - nameWidth) * 0.5, finalY);
+			canvas.fillText(name, (x + cullXLeft * dinoScale) + (textureW - nameWidth) * 0.5, finalY - 5);
 		else
-			canvas.fillText(name, location[0], location[1]);
-
-		canvas.drawImage(dinoCanvas.canvas, 0, 0, textureW, textureH, x + offsetX * dinoScale, finalY, textureW, textureH);
+			canvas.fillText(name, location[0] + 10, location[1] + 5);
 	}
 
 	// init
@@ -588,14 +616,14 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 		canvas.fillStyle = 'white';
 
 		canvas.font = '15px Arial';
-		canvas.fillText(`DinoCount: ${dinoCount}, FPS: ${nowFps.toFixed(2)}`, 5, 20);
+		canvas.fillText(`DinoCount: ${dinoCount}, Order: ${order.length}, FPS: ${nowFps.toFixed(2)}`, 5, 20);
 
 		drawFrame(res, canvas);
 
 		frameCount++;
 		requestAnimationFrame(renderFrame);
 		const now = perf.now();
-		if (frameCount % 3 === 0)
+		if (frameCount % 5 === 0)
 			nowFps = (
 				(fps[0]) +
 				(fps[0] = fps[1]) +
@@ -733,7 +761,7 @@ function require(url) {
 				let module_${fileName};
 				${script}
 				return module_${fileName};
-			})()`)
+			})()`);
 		} else
 			console.log(contentType);
 	});

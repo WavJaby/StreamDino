@@ -110,6 +110,20 @@
 		<input type="button" class="button focusGlow" onclick="copyToClipboard(this)" value="Copy link">
 	</form>
 	<script>
+		// init
+		let tokenData = localStorage.getItem('tokenData');
+		if (tokenData) {
+			tokenData = JSON.parse(tokenData);
+			if (tokenData && tokenData.state) {
+				const settings = Object.fromEntries(tokenData.state.split('&').map(i => i.split('=').map(decodeURIComponent)));
+				for (const child of document.body.getElementsByTagName('form')[0].children) {
+					if (child.tagName === 'INPUT' && settings[child.name]) {
+						child.value = settings[child.name];
+					}
+				}
+			}
+		}
+
 		/**
 		 * @param element {HTMLInputElement}
 		 */
