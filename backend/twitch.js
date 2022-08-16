@@ -94,7 +94,7 @@ function onMessage(data) {
 		data = data.slice(0, data.length - 2);
 	data = data.split('\r\n');
 	for (const message of data) {
-		// console.log(`"${message}"`);
+		console.log(`"${message}"`);
 		const event = parseMessage(message);
 		if (event.command.type === Command.LOGIN) {
 			console.log('Login successful');

@@ -15,9 +15,10 @@ class Command {
 	static NOTICE = 10;
 	static USERNOTICE = 11;
 	static CLEARCHAT = 12;
-	static HOSTTARGET = 13;
-	static PRIVMSG = 14;
-	static USERINCHANNEL = 15;
+	static CLEARMSG = 13;
+	static HOSTTARGET = 14;
+	static PRIVMSG = 15;
+	static USERINCHANNEL = 16;
 
 	// state
 	static GLOBALUSERSTATE = 100;
@@ -208,6 +209,7 @@ function parseCommand(rawCommandComponent) {
 		case 'NOTICE':
 		case 'USERNOTICE':
 		case 'CLEARCHAT':
+		case 'CLEARMSG':
 		case 'HOSTTARGET':
 		case 'PRIVMSG':
 			parsedCommand = {

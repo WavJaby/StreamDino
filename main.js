@@ -6,8 +6,8 @@ let canvasWidth, canvasHeight;
 
 let lastXBlockCount, lastYBlockCount, xBlocks;
 const userDino = {};
-let order = [];
-let dinoCount = 0;
+let dinoCount = 0, messageCount = 0;
+let firstDino = null, lastDino;
 
 async function initVariable(res, stateData, Twitch) {
 	// get token data
@@ -100,14 +100,32 @@ function linkTwitch(res, stateData, Twitch, Command) {
 		if (!(dino = userDino[userData.userID])) {
 			const dinoScale = (Math.random() * settings.maxDinoScale + 1) | 0;
 			dino = userDino[userData.userID] = new Dino(Math.random() * canvasWidth, canvasHeight * 0.1, dinoScale, userData.displayName, userData.color, res, Math.random());
-			dino.id = dinoCount++;
-			dino.lastPos = -1;
+			dino.pre = dino.next = null;
+			dinoCount++;
 		}
 		dino.say(e.parameters, 5);
-		if (dino.lastPos !== -1)
-			order[dino.lastPos] = null;
-		dino.lastPos = order.length;
-		order.push(dino);
+		dino.id = messageCount++;
+		if (firstDino === null) {
+			firstDino = lastDino = dino;
+		} else if (dino !== lastDino) {
+			// pop this dino
+			if (dino.pre !== null) {
+				dino.pre.next = dino.next;
+				dino.next.pre = dino.pre;
+				dino.next = null;
+			}
+			// pop first dino
+			else if (dino.next !== null) {
+				dino.next.pre = null;
+				firstDino = dino.next;
+				dino.next = null;
+			}
+			// append dino
+			lastDino.next = dino;
+			dino.pre = lastDino;
+			lastDino = dino;
+		}
+
 
 		// // debug
 		// const debugObj = JSON.parse(JSON.stringify(e));
@@ -163,15 +181,11 @@ function drawFrame(res, canvas) {
 	}
 
 	// render dino
-	const newOrder = new Array(dinoCount);
-	let j = 0;
-	for (let i = 0; i < order.length; i++) {
-		if (order[i] === null || order[i] === undefined)
-			continue;
-		order[i].render(canvas);
-		newOrder[j++] = order[i];
+	let dino = firstDino;
+	while (dino) {
+		dino.render(canvas);
+		dino = dino.next;
 	}
-	order = newOrder;
 }
 
 
@@ -616,7 +630,7 @@ function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
 		canvas.fillStyle = 'white';
 
 		canvas.font = '15px Arial';
-		canvas.fillText(`DinoCount: ${dinoCount}, Order: ${order.length}, FPS: ${nowFps.toFixed(2)}`, 5, 20);
+		canvas.fillText(`DinoCount: ${dinoCount}, FPS: ${nowFps.toFixed(2)}`, 5, 20);
 
 		drawFrame(res, canvas);
 
