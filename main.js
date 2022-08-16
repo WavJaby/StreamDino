@@ -22,8 +22,14 @@ async function init(res) {
 		? null
 		: Object.fromEntries(window.location.search.slice(1).split('&').map(i => i.split('=').map(decodeURIComponent)));
 
+	// if settings not set yet
+	if ((state === null || !state.joinChannel) && token === null) {
+		window.open('settings.html', '_self');
+		return;
+	}
+
 	// twitch
-	const {Command} = await require("backend/messageParser");
+	const {Command} = await require('backend/messageParser');
 	require('backend/twitch').then(Twitch => {
 		if (!token) {
 			Twitch.getAccessToken({

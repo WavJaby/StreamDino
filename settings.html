@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Settings</title>
+	<style>
+		html, body {
+			width: 100%;
+			height: 100%;
+			margin: 0;
+			padding: 0;
+		}
+
+		body {
+			background-color: #0E0E10;
+			color: white;
+			position: relative;
+			box-sizing: border-box;
+			padding: 20px;
+			font-family: Arial, monospace;
+		}
+
+		:root {
+			--text_input_bg: #FFFFFF33;
+			--text_input_height: 16px;
+			--button_bg: #9147ff;
+			--button_hover_bg: #772ce8;
+		}
+
+		h2 {
+			font-size: 38px;
+			margin: 0 0 10px 0;
+		}
+
+		label {
+			font-size: 15px;
+			margin-bottom: 10px;
+			display: block;
+		}
+
+		input {
+			display: block;
+			margin-bottom: 10px;
+		}
+
+		input[type=text] {
+			background-color: var(--text_input_bg);
+			height: var(--text_input_height);
+			color: white;
+			border-radius: 5px;
+			padding: 5px 10px;
+		}
+
+		.button {
+			background-color: var(--button_bg);
+			color: white;
+			font-size: 14px;
+			user-select: none;
+			border-radius: 5px;
+			padding: 5px;
+		}
+
+		.button:hover {
+			background-color: var(--button_hover_bg);
+		}
+
+		.button:active {
+			background-color: var(--button_bg);
+		}
+
+		.focusGlow {
+			border: solid 2px rgba(0, 0, 0, 0);
+		}
+
+		.focusGlow:hover {
+			border-color: var(--text_input_bg);
+		}
+
+		.focusGlow:focus {
+			border-color: var(--button_hover_bg);
+			box-shadow: 0 0 0 rgba(0, 0, 0, 0.075) inset, 0 0 8px #772ce899;
+			outline: 0 none;
+		}
+
+		/*Auto fill bg color*/
+		input:-webkit-autofill,
+		input:-webkit-autofill:hover,
+		input:-webkit-autofill:focus,
+		input:-webkit-autofill:active {
+			-webkit-box-shadow: 0 0 0 30px #3E3E40 inset !important;
+			-webkit-text-fill-color: white !important;
+		}
+	</style>
+</head>
+<body>
+<div>
+	<form action=".">
+		<h2>Stream Dino Settings</h2>
+		<label for="joinChannelInput">Channel to join</label>
+		<input type="text" id="joinChannelInput" class="focusGlow" name="joinChannel" placeholder="Channel Name">
+
+		<input type="submit" class="button focusGlow" value="Save">
+		<input type="button" class="button focusGlow" onclick="copyToClipboard(this)" value="Copy link">
+	</form>
+	<script>
+		/**
+		 * @param element {HTMLInputElement}
+		 */
+		function copyToClipboard(element) {
+			const typesArray = [];
+			for (const child of element.parentNode.children) {
+				if (child.tagName === 'INPUT' && child.name) {
+					typesArray.push(child.name + '=' + (child.value ? child.value : ''));
+				}
+			}
+			const text = `${new URL(element.parentNode.action).href}?${typesArray.join('&')}`;
+			navigator.clipboard.writeText(text).then(function () {
+				alert('Copying to clipboard was successful!');
+			}, function () {
+				alert('Could not copy url, the url is: ' + text);
+			});
+		}
+	</script>
+</div>
+</body>
+</html>
