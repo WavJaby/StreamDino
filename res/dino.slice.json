@@ -27,15 +27,15 @@
   {
     "name": "msgBoxMid",
     "x": 0,
-    "y": 8,
+    "y": 16,
     "w": 24,
-    "h": 8,
+    "h": 4,
     "piece": 3
   },
   {
     "name": "msgBoxBtm",
     "x": 0,
-    "y": 16,
+    "y": 8,
     "w": 24,
     "h": 8,
     "piece": 3

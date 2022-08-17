@@ -205,13 +205,18 @@ function drawFrame(res, canvas) {
 }
 
 
-function Dialog(fontSize, borderSize, font, res) {
+function Dialog(fontSize, font, res) {
 	const msgBoxTop = res.msgBoxTop;
 	const msgBoxBtm = res.msgBoxBtm;
 	const msgBoxMid = res.msgBoxMid;
 	const msgBoxHdl = res.msgBoxHdl_normal;
 	const msgBoxHdlMir = res.msgBoxHdl_xMirror;
 
+	const texturePadding = 6;
+	const borderSizeX = 16;
+	const borderSizeY = 8;
+	const paddingX = -5;
+	const paddingY = -5;
 	const textHeight = fontSize * 1.25;
 	const emoteSize = textHeight;
 	const emoteGap = 2;
@@ -236,24 +241,24 @@ function Dialog(fontSize, borderSize, font, res) {
 	 * @param facing {boolean}
 	 */
 	function setPosition(newX, newY, facing) {
-		originalX = x = newX - (facing ? 0 : borderSize);
+		originalX = x = newX - (facing ? 0 : borderSizeX);
 		y = newY;
 
 		// keep handle in bound
-		if (originalX - borderSize < 0)
-			originalX = borderSize;
-		else if (originalX + borderSize * 2 > canvasWidth)
-			originalX = canvasWidth - borderSize * 2;
+		if (originalX - borderSizeX < 0)
+			originalX = borderSizeX;
+		else if (originalX + borderSizeX * 2 > canvasWidth)
+			originalX = canvasWidth - borderSizeX * 2;
 
 		// set origin
-		y -= borderHeight + borderSize;
-		x -= borderSize;
+		y -= borderHeight;
+		x -= borderSizeX;
 
 		// keep border in bound
 		if (x < 0)
 			x = 0;
-		else if (x + borderWidth + borderSize > canvasWidth)
-			x = canvasWidth - borderWidth - borderSize;
+		else if (x + borderWidth > canvasWidth)
+			x = canvasWidth - borderWidth;
 		x |= 0;
 		y |= 0;
 		originalX |= 0;
@@ -324,11 +329,12 @@ function Dialog(fontSize, borderSize, font, res) {
 			// lines = text.split(/\r?\n/);
 			// totalMsgWidth = Array.from(lines).map(i => getTextWidth(i, font)).reduce((i, j) => i > j ? i : j);
 			// textHeight = (fontSize * lines.length) + fontSize * 0.25;
-			totalMsgHeight = textHeight * lineBreaks;
-			borderWidth = Math.ceil(totalMsgWidth / borderSize + 1) * borderSize;
-			borderHeight = Math.ceil(totalMsgHeight / borderSize + 1) * borderSize;
+			totalMsgHeight = textHeight * lineBreaks + paddingY * 2;
+			totalMsgWidth += paddingX * 2;
+			borderWidth = Math.ceil(totalMsgWidth / borderSizeX + 2) * borderSizeX;
+			borderHeight = Math.ceil(totalMsgHeight / borderSizeY) * borderSizeY + borderSizeX * 2;
 
-			dialogCanvas = createCanvas(borderWidth + borderSize, borderHeight + borderSize);
+			dialogCanvas = createCanvas(borderWidth, borderHeight);
 			dialogCanvas.fillStyle = 'white';
 			dialogCanvas.font = font;
 
@@ -343,7 +349,7 @@ function Dialog(fontSize, borderSize, font, res) {
 	 * @return [x:number, y:number]|null
 	 */
 	function render(canvas) {
-		if (!showDialog) return null;
+		if (!showDialog || !dialogCanvas) return null;
 
 		if (!needRender) {
 			canvas.drawImage(dialogCanvas.canvas, x, y);
@@ -354,25 +360,24 @@ function Dialog(fontSize, borderSize, font, res) {
 		dialogCanvas.clearRect(0, 0, dialogCanvas.canvas.width, dialogCanvas.canvas.height)
 		let i;
 		// left and right line
-		for (i = 0; i < totalMsgHeight; i += borderSize) {
-			dialogCanvas.drawImage(msgBoxMid[0], 0, borderSize + i, borderSize, borderSize);
-			dialogCanvas.drawImage(msgBoxMid[2], borderWidth, borderSize + i, borderSize, borderSize);
+		for (i = 0; i < totalMsgHeight; i += borderSizeY) {
+			dialogCanvas.drawImage(msgBoxMid[0], 0, borderSizeX + i, borderSizeX, borderSizeY);
+			dialogCanvas.drawImage(msgBoxMid[2], borderWidth - borderSizeX, borderSizeX + i, borderSizeX, borderSizeY);
 		}
 		// top and bottom line
-		dialogCanvas.drawImage(msgBoxTop[0], 0, 0, borderSize, borderSize);
-		dialogCanvas.drawImage(msgBoxBtm[0], 0, borderHeight, borderSize, borderSize);
-		for (i = 0; i < totalMsgWidth; i += borderSize) {
-			dialogCanvas.drawImage(msgBoxTop[1], borderSize + i, 0, borderSize, borderSize);
-			dialogCanvas.drawImage(msgBoxBtm[1], borderSize + i, borderHeight, borderSize, borderSize);
+		dialogCanvas.drawImage(msgBoxTop[0], 0, 0, borderSizeX, borderSizeX);
+		dialogCanvas.drawImage(msgBoxBtm[0], 0, borderHeight - borderSizeX, borderSizeX, borderSizeX);
+		for (i = 0; i < totalMsgWidth; i += borderSizeX) {
+			dialogCanvas.drawImage(msgBoxTop[1], borderSizeX + i, 0, borderSizeX, borderSizeX);
+			dialogCanvas.drawImage(msgBoxBtm[1], borderSizeX + i, borderHeight - borderSizeX, borderSizeX, borderSizeX);
 		}
-		dialogCanvas.drawImage(msgBoxTop[2], borderSize + i, 0, borderSize, borderSize);
-		dialogCanvas.drawImage(msgBoxBtm[2], borderSize + i, borderHeight, borderSize, borderSize);
+		dialogCanvas.drawImage(msgBoxTop[2], borderSizeX + i, 0, borderSizeX, borderSizeX);
+		dialogCanvas.drawImage(msgBoxBtm[2], borderSizeX + i, borderHeight - borderSizeX, borderSizeX, borderSizeX);
 
 		// handle
 		const handleOffsetX = originalX - x;
-		dialogCanvas.clearRect(handleOffsetX, borderHeight, borderSize, borderSize);
-		dialogCanvas.drawImage(handleFacing ? msgBoxHdl : msgBoxHdlMir, handleOffsetX, borderHeight, borderSize, borderSize);
-
+		dialogCanvas.clearRect(handleOffsetX, borderHeight - borderSizeX + texturePadding, borderSizeX, borderSizeX - texturePadding);
+		dialogCanvas.drawImage(handleFacing ? msgBoxHdl : msgBoxHdlMir, handleOffsetX, borderHeight - borderSizeX, borderSizeX, borderSizeX);
 
 		// fill background
 		const dialogCanvasWidth = dialogCanvas.canvas.width;
@@ -397,10 +402,12 @@ function Dialog(fontSize, borderSize, font, res) {
 			// fill
 			for (x; x < end; x++) {
 				const i = (y * dialogCanvasWidth + x) * 4;
-				imgData.data[i] = (bgColor & 0xFF0000) >> 16;
-				imgData.data[i + 1] = (bgColor & 0xFF00) >> 8;
-				imgData.data[i + 2] = bgColor & 0xFF;
-				imgData.data[i + 3] = 255;
+				if (imgData.data[i + 3] === 0) {
+					imgData.data[i] = (bgColor & 0xFF0000) >> 16;
+					imgData.data[i + 1] = (bgColor & 0xFF00) >> 8;
+					imgData.data[i + 2] = bgColor & 0xFF;
+					imgData.data[i + 3] = 255;
+				}
 			}
 		}
 		dialogCanvas.putImageData(imgData, 0, 0);
@@ -409,8 +416,8 @@ function Dialog(fontSize, borderSize, font, res) {
 		// for (let j = 0; j < lines.length; j++)
 		// 	dialogCanvas.fillText(lines[j], (borderWidth + borderSize - totalMsgWidth) * 0.5, (borderHeight + borderSize - textHeight) * 0.5 + (j + 1) * fontSize);
 
-		const textOffsetX = (borderWidth + borderSize - totalMsgWidth) * 0.5;
-		const textOffsetY = (borderHeight + borderSize - totalMsgHeight) * 0.5;
+		const textOffsetX = (borderWidth - totalMsgWidth) * 0.5 + paddingX;
+		const textOffsetY = (borderHeight - totalMsgHeight) * 0.5 + paddingY;
 		let startX = 0;
 		let line = 1;
 		for (let j = 0; j < procText.length; j++) {
@@ -440,9 +447,14 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 	const cullWidth = 4, cullXLeft = -2, cullYBottom = -5, cullYTop = -4;
 	const Random = new RNG(seed);
 	const speed = 10 * dinoScale;
-	const dialog = new Dialog(20, 16, font, res);
+	const dialog = new Dialog(20, font, res);
 
-	const nameFontSize = 15, nameFont = `${nameFontSize}px ${font}`, nameWidth = getTextWidth(name, nameFont);
+	const marginX = 10;
+	const marginY = 3;
+	const fontSize = 12;
+	const nameFont = `${fontSize}px ${font}`;
+	const nameWidth = getTextWidth(name, nameFont);
+	const textHeight = fontSize * 1.25;
 
 	// for render
 	let dinoRes = [], dinoCanvas;
@@ -457,11 +469,12 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 	let lastMoveChangeFrame = frameCount, moveChangeDelay, moveChangeState = 0;
 	// moving state
 	let lastState = 0;
-	let dinoColor;
+	let dinoColor, dinoColorHex;
 	// dialog
 	let lastDialogFrame = frameCount, dialogCloseDelay = -1;
 
 	function setDinoColor(colorHex) {
+		dinoColorHex = colorHex;
 		dinoColor = parseInt(colorHex.slice(1), 16);
 		dialog.setBackGroundColor(dinoColor);
 		initDinoRes();
@@ -644,8 +657,6 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 		}
 
 		const finalY = canvasHeight - textureH - 1 - (y + (cullYBottom + cullYTop) * dinoScale);
-		// render dino
-		canvas.drawImage(dinoCanvas, 0, 0, dinoCanvas.width, dinoCanvas.height, x + cullXLeft * dinoScale, finalY + cullYTop * dinoScale, textureW, textureH);
 
 		// render dialog
 		if (dialogCloseDelay !== -1 && frameCount - lastDialogFrame > dialogCloseDelay) {
@@ -656,12 +667,25 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 		const location = dialog.render(canvas);
 
 		// render name
-		canvas.fillStyle = 'white';
 		canvas.font = nameFont;
-		if (location === null)
-			canvas.fillText(name, (x + cullXLeft * dinoScale) + (textureW - nameWidth) * 0.5, finalY - 5);
-		else
-			canvas.fillText(name, location[0] + 10, location[1] + 5);
+		const bgHeight = textHeight + marginY * 2;
+		const r = bgHeight * 0.5;
+		if (location === null) {
+			const finalX = (x + cullXLeft * dinoScale) + (textureW - nameWidth) * 0.5;
+			canvas.fillStyle = '#000000E0';
+			canvas.roundRect(finalX, finalY - textHeight - marginY, getTextWidth(name, nameFont) + marginX * 2, bgHeight, r).fill();
+			canvas.fillStyle = 'white';
+			canvas.fillText(name, finalX + marginX, finalY - textHeight + fontSize);
+		} else {
+			const finalX = location[0] + 10;
+			canvas.fillStyle = '#000000E0';
+			canvas.roundRect(finalX, location[1] - fontSize - marginY, getTextWidth(name, nameFont) + marginX * 2, bgHeight, r).fill();
+			canvas.fillStyle = 'white';
+			canvas.fillText(name, finalX + marginX, location[1]);
+		}
+
+		// render dino
+		canvas.drawImage(dinoCanvas, 0, 0, dinoCanvas.width, dinoCanvas.height, x + cullXLeft * dinoScale, finalY + cullYTop * dinoScale, textureW, textureH);
 	}
 
 	// init
@@ -809,6 +833,19 @@ function getTextWidth(text, font) {
 	const context = getTextWidth.ctx || (getTextWidth.ctx = canvas.getContext('2d'));
 	context.font = font;
 	return context.measureText(text).width;
+}
+
+CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+	if (w < 2 * r) r = w / 2;
+	if (h < 2 * r) r = h / 2;
+	this.beginPath();
+	this.moveTo(x + r, y);
+	this.arcTo(x + w, y, x + w, y + h, r);
+	this.arcTo(x + w, y + h, x, y + h, r);
+	this.arcTo(x, y + h, x, y, r);
+	this.arcTo(x, y, x + w, y, r);
+	this.closePath();
+	return this;
 }
 
 /**

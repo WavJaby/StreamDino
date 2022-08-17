@@ -88,7 +88,7 @@ function onClose() {
 	client = null;
 
 	// reconnect
-	const reconnectTime = 5000;
+	const reconnectTime = 1000;
 	console.log(`Reconnect in ${reconnectTime}sec`);
 	setTimeout(startListen, reconnectTime);
 }
