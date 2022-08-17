@@ -10,12 +10,14 @@ const https = require('https');
 const {parse: urlPars} = require('url');
 
 // client data
+const clientID = '8z8uiiczsmbkdnfaqjgza8pgy2fpnp';
 const endpointURL = 'wss://irc-ws.chat.twitch.tv:443';
+const username = 'WavJaby\'s_Bot';
 let client;
 let token;
 let retryTimer;
 let timeout;
-const username = 'WavJaby\'s_Bot';
+let requestHeader;
 // event listener
 let onReady = null, onEvent = null;
 
@@ -47,14 +49,16 @@ function startListen(accessToken, timeoutTime) {
 		token = accessToken;
 	if (timeoutTime)
 		timeout = timeoutTime;
+
+	requestHeader = {
+		'Authorization': `Bearer ${accessToken}`,
+		'Client-Id': clientID
+	};
+
 	// check if connected
 	retryTimer = setInterval(() => {
 		if (client)
 			client.close();
-		else {
-			console.warn('connect failed, retrying...');
-			connectToTwitch(accessToken, retryTimer);
-		}
 	}, timeout);
 	connectToTwitch(accessToken, retryTimer);
 }
@@ -84,8 +88,9 @@ function onClose() {
 	client = null;
 
 	// reconnect
-	console.log(`Reconnect in ${5}sec`);
-	setTimeout(startListen, 5);
+	const reconnectTime = 5000;
+	console.log(`Reconnect in ${reconnectTime}sec`);
+	setTimeout(startListen, reconnectTime);
 }
 
 function onMessage(data) {
@@ -94,7 +99,6 @@ function onMessage(data) {
 		data = data.slice(0, data.length - 2);
 	data = data.split('\r\n');
 	for (const message of data) {
-		console.log(`"${message}"`);
 		const event = parseMessage(message);
 		if (event.command.type === Command.LOGIN) {
 			console.log('Login successful');
@@ -105,8 +109,52 @@ function onMessage(data) {
 			console.log(`Twitch notice from channel "${event.command.channel}", message: ${event.parameters}`);
 		} else if (event.command.type < 1000) {
 			if (onEvent) onEvent(event);
-		}
+		} else
+			console.log(`"${message}"`);
 	}
+}
+
+function getChannelEmote(broadcasterID) {
+	const emotes = {};
+	return fetch(
+		`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${broadcasterID}`,
+		{headers: requestHeader})
+		.then(i => i.json())
+		.then(i => Promise.all(i.data.map(j => ((j = loadEmote(j)) && (emotes[j.name] = j)).loadEmote)) && emotes);
+}
+
+function getTwitchEmote() {
+	const emotes = {};
+	return fetch(
+		'https://api.twitch.tv/helix/chat/emotes/global',
+		{headers: requestHeader})
+		.then(i => i.json())
+		.then(i => Promise.all(i.data.map(j => ((j = loadEmote(j)) && (emotes[j.name] = j)).loadEmote)) && emotes);
+}
+
+function loadEmote(data) {
+	let imgUrl;
+	for (let i = 0; i < data.scale.length; i++)
+		if (data.scale[i] === '2.0') {
+			imgUrl = data.images[`url_${data.scale[i][0]}x`];
+			break;
+		}
+	if (!imgUrl)
+		imgUrl = data.images[0];
+
+	// load image
+	const image = new Image();
+	const promise = new Promise(resolve => image.onload = resolve);
+	image.src = imgUrl;
+	image.crossOrigin = 'Anonymous';
+
+	return {
+		id: data.id,
+		name: data.name,
+		imgUrl: imgUrl,
+		img: image,
+		loadEmote: promise
+	};
 }
 
 /**
@@ -114,7 +162,7 @@ function onMessage(data) {
  * @return {Promise<unknown> | null}
  */
 function getAccessToken(option) {
-	let authUrl = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${option.clientID}&scope=${encodeURIComponent(option.scopes.join(' '))}&redirect_uri=${encodeURIComponent(option.redirectUri)}`;
+	let authUrl = `https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=${clientID}&scope=${encodeURIComponent(option.scopes.join(' '))}&redirect_uri=${encodeURIComponent(option.redirectUri)}`;
 	if (option.state)
 		authUrl += `&state=${encodeURIComponent(option.state)}`;
 
@@ -162,6 +210,8 @@ function getAccessToken(option) {
 module.exports = {
 	startListen,
 	getAccessToken,
+	getChannelEmote,
+	getTwitchEmote,
 	setOnEvent,
 	setOnReady,
 	sendMessage,

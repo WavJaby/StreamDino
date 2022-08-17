@@ -6,6 +6,7 @@ let canvasWidth, canvasHeight;
 
 let lastXBlockCount, lastYBlockCount, xBlocks;
 const userDino = {};
+const emotes = {};
 let dinoCount = 0, messageCount = 0;
 let firstDino = null, lastDino;
 
@@ -50,7 +51,6 @@ async function initVariable(res, stateData, Twitch) {
 	// if no token data
 	if (!hashString) {
 		Twitch.getAccessToken({
-			clientID: '8z8uiiczsmbkdnfaqjgza8pgy2fpnp',
 			redirectUri: window.location.origin + window.location.pathname,
 			scopes: [
 				'chat:read',
@@ -76,58 +76,17 @@ async function initVariable(res, stateData, Twitch) {
 function linkTwitch(res, stateData, Twitch, Command) {
 	const usersData = {};
 	const settings = stateData.settings;
+	let roomID;
+
 	console.log(settings);
 
-	function onReady() {
+	async function onReady() {
 		Twitch.sendMessage(`JOIN #${settings.joinChannel}`);
+		Object.assign(emotes, await Twitch.getTwitchEmote());
 	}
 
-	function onEvent(e) {
-		if (e.command.type !== Command.PRIVMSG) return;
-
-		const userData = usersData[e.source.nick] = {
-			color: e.tags.color,
-			displayName: e.tags['display-name'],
-			userID: e.tags['user-id'],
-		};
-
-		// give random color if user don't have
-		if (!userData.color)
-			userData.color = '#' + ((Math.random() * 0xFFFFFF) | 0).toString(16);
-
-		// create Dino
-		let dino;
-		if (!(dino = userDino[userData.userID])) {
-			const dinoScale = (Math.random() * settings.maxDinoScale + 1) | 0;
-			dino = userDino[userData.userID] = new Dino(Math.random() * canvasWidth, canvasHeight * 0.1, dinoScale, userData.displayName, userData.color, res, Math.random());
-			dino.pre = dino.next = null;
-			dinoCount++;
-		}
-		dino.say(e.parameters, 5);
-		dino.id = messageCount++;
-		if (firstDino === null) {
-			firstDino = lastDino = dino;
-		} else if (dino !== lastDino) {
-			// pop this dino
-			if (dino.pre !== null) {
-				dino.pre.next = dino.next;
-				dino.next.pre = dino.pre;
-				dino.next = null;
-			}
-			// pop first dino
-			else if (dino.next !== null) {
-				dino.next.pre = null;
-				firstDino = dino.next;
-				dino.next = null;
-			}
-			// append dino
-			lastDino.next = dino;
-			dino.pre = lastDino;
-			lastDino = dino;
-		}
-
-
-		// // debug
+	async function onEvent(e) {
+		// debug
 		// const debugObj = JSON.parse(JSON.stringify(e));
 		// for (const key in Command)
 		// 	if (Command[key] === debugObj.command.type) {
@@ -135,6 +94,60 @@ function linkTwitch(res, stateData, Twitch, Command) {
 		// 		break;
 		// 	}
 		// console.log(debugObj);
+
+		switch (e.command.type) {
+			case Command.ROOMSTATE: {
+				roomID = e.tags['room-id'];
+				Object.assign(emotes, await Twitch.getChannelEmote(roomID));
+				break;
+			}
+			case Command.PRIVMSG: {
+				const userData = usersData[e.source.nick] = {
+					color: e.tags.color,
+					displayName: e.tags['display-name'],
+					userID: e.tags['user-id'],
+				};
+
+				// give random color if user don't have
+				if (!userData.color)
+					userData.color = '#' + ((Math.random() * 0xFFFFFF) | 0).toString(16);
+
+				// create Dino
+				let dino;
+				if (!(dino = userDino[userData.userID])) {
+					const dinoScale = (Math.random() * settings.maxDinoScale + 1) | 0;
+					dino = userDino[userData.userID] =
+						new Dino(Math.random() * canvasWidth, 0,
+							dinoScale, userData.displayName, userData.color, 'Arial',
+							res, Math.random());
+					dino.pre = dino.next = null;
+					dinoCount++;
+				}
+				dino.say(e.parameters, 5);
+				dino.id = messageCount++;
+				if (firstDino === null) {
+					firstDino = lastDino = dino;
+				} else if (dino !== lastDino) {
+					// pop this dino
+					if (dino.pre !== null) {
+						dino.pre.next = dino.next;
+						dino.next.pre = dino.pre;
+						dino.next = null;
+					}
+					// pop first dino
+					else if (dino.next !== null) {
+						dino.next.pre = null;
+						firstDino = dino.next;
+						dino.next = null;
+					}
+					// append dino
+					lastDino.next = dino;
+					dino.pre = lastDino;
+					lastDino = dino;
+				}
+				break;
+			}
+		}
 	}
 
 	Twitch.setOnReady(onReady);
@@ -181,9 +194,12 @@ function drawFrame(res, canvas) {
 	}
 
 	// render dino
+	let maxDino = 30;
 	let dino = firstDino;
+	let i = 0;
 	while (dino) {
-		dino.render(canvas);
+		if (++i > dinoCount - maxDino)
+			dino.render(canvas);
 		dino = dino.next;
 	}
 }
@@ -196,16 +212,21 @@ function Dialog(fontSize, borderSize, font, res) {
 	const msgBoxHdl = res.msgBoxHdl_normal;
 	const msgBoxHdlMir = res.msgBoxHdl_xMirror;
 
+	const textHeight = fontSize * 1.25;
+	const emoteSize = textHeight;
+	const emoteGap = 2;
+
 	font = `${fontSize}px ${font}`;
 	// dialog size
 	let borderWidth, borderHeight;
 	let dialogCanvas;
 
 	// live change
-	let lines, text, textWidth, textHeight;
+	const procText = [];
+	let text, totalMsgWidth, totalMsgHeight;
 	let bgColor;
 	let lastHandePos, originalX, x, y;
-	let needRender = true;
+	let needRender = false;
 	let showDialog = false;
 	let handleFacing = true;
 
@@ -215,9 +236,6 @@ function Dialog(fontSize, borderSize, font, res) {
 	 * @param facing {boolean}
 	 */
 	function setPosition(newX, newY, facing) {
-		if (handleFacing !== facing)
-			needRender = true;
-		handleFacing = facing;
 		originalX = x = newX - (facing ? 0 : borderSize);
 		y = newY;
 
@@ -239,7 +257,8 @@ function Dialog(fontSize, borderSize, font, res) {
 		x |= 0;
 		y |= 0;
 		originalX |= 0;
-		if (lastHandePos !== originalX - x) {
+		if (lastHandePos !== originalX - x || handleFacing !== facing) {
+			handleFacing = facing;
 			lastHandePos = originalX - x;
 			needRender = true;
 		}
@@ -264,14 +283,51 @@ function Dialog(fontSize, borderSize, font, res) {
 		} else if (newText !== text) {
 			text = newText;
 
-			// updateText
-			lines = text.split(/\r?\n/);
-			textWidth = Array.from(lines).map(i => getTextWidth(i, font)).reduce((i, j) => i > j ? i : j);
-			textHeight = (fontSize * lines.length) + fontSize * 0.25;
-			borderWidth = Math.ceil(textWidth / borderSize + 1) * borderSize;
-			borderHeight = Math.ceil(textHeight / borderSize + 1) * borderSize;
+			procText.length = 0;
+			totalMsgWidth = 0;
+			let lineBreaks = 1;
+			if (emotes) {
+				const splitText = text.split(' ');
+				const textCache = [];
+				for (let i = 0; i < splitText.length + 1; i++) {
+					const lastElement = i === splitText.length;
+					const text = lastElement ? null : splitText[i];
+					const isEmote = lastElement ? null : emotes[text];
+					// add emote
+					if (isEmote || lastElement) {
+						// add textCache and emote
+						if (textCache.length > 0) {
+							const joinedText = textCache.join(' ')
+							let textWidth = getTextWidth(joinedText, font);
+							if (!lastElement) textWidth += emoteGap;
+							procText.push(joinedText, textWidth);
+							totalMsgWidth += textWidth;
+							textCache.length = 0;
+						}
+						// add emote
+						if (isEmote) {
+							procText.push(isEmote.img);
+							const width = (emoteSize / isEmote.img.height) * isEmote.img.width;
+							totalMsgWidth += lastElement ? width : (width + emoteGap);
+						}
+					}
+					// add text
+					else
+						textCache.push(text);
+				}
+			} else {
+				totalMsgWidth = getTextWidth(text, font);
+				procText.push(text);
+			}
 
-			// update canvas
+			// updateText
+			// lines = text.split(/\r?\n/);
+			// totalMsgWidth = Array.from(lines).map(i => getTextWidth(i, font)).reduce((i, j) => i > j ? i : j);
+			// textHeight = (fontSize * lines.length) + fontSize * 0.25;
+			totalMsgHeight = textHeight * lineBreaks;
+			borderWidth = Math.ceil(totalMsgWidth / borderSize + 1) * borderSize;
+			borderHeight = Math.ceil(totalMsgHeight / borderSize + 1) * borderSize;
+
 			dialogCanvas = createCanvas(borderWidth + borderSize, borderHeight + borderSize);
 			dialogCanvas.fillStyle = 'white';
 			dialogCanvas.font = font;
@@ -298,14 +354,14 @@ function Dialog(fontSize, borderSize, font, res) {
 		dialogCanvas.clearRect(0, 0, dialogCanvas.canvas.width, dialogCanvas.canvas.height)
 		let i;
 		// left and right line
-		for (i = 0; i < textHeight; i += borderSize) {
+		for (i = 0; i < totalMsgHeight; i += borderSize) {
 			dialogCanvas.drawImage(msgBoxMid[0], 0, borderSize + i, borderSize, borderSize);
 			dialogCanvas.drawImage(msgBoxMid[2], borderWidth, borderSize + i, borderSize, borderSize);
 		}
 		// top and bottom line
 		dialogCanvas.drawImage(msgBoxTop[0], 0, 0, borderSize, borderSize);
 		dialogCanvas.drawImage(msgBoxBtm[0], 0, borderHeight, borderSize, borderSize);
-		for (i = 0; i < textWidth; i += borderSize) {
+		for (i = 0; i < totalMsgWidth; i += borderSize) {
 			dialogCanvas.drawImage(msgBoxTop[1], borderSize + i, 0, borderSize, borderSize);
 			dialogCanvas.drawImage(msgBoxBtm[1], borderSize + i, borderHeight, borderSize, borderSize);
 		}
@@ -313,9 +369,9 @@ function Dialog(fontSize, borderSize, font, res) {
 		dialogCanvas.drawImage(msgBoxBtm[2], borderSize + i, borderHeight, borderSize, borderSize);
 
 		// handle
-		const offsetX = originalX - x;
-		dialogCanvas.clearRect(offsetX, borderHeight, borderSize, borderSize);
-		dialogCanvas.drawImage(handleFacing ? msgBoxHdl : msgBoxHdlMir, offsetX, borderHeight, borderSize, borderSize);
+		const handleOffsetX = originalX - x;
+		dialogCanvas.clearRect(handleOffsetX, borderHeight, borderSize, borderSize);
+		dialogCanvas.drawImage(handleFacing ? msgBoxHdl : msgBoxHdlMir, handleOffsetX, borderHeight, borderSize, borderSize);
 
 
 		// fill background
@@ -350,8 +406,27 @@ function Dialog(fontSize, borderSize, font, res) {
 		dialogCanvas.putImageData(imgData, 0, 0);
 
 		// text
-		for (let j = 0; j < lines.length; j++)
-			dialogCanvas.fillText(lines[j], (borderWidth + borderSize - textWidth) * 0.5, (borderHeight + borderSize - textHeight) * 0.5 + (j + 1) * fontSize);
+		// for (let j = 0; j < lines.length; j++)
+		// 	dialogCanvas.fillText(lines[j], (borderWidth + borderSize - totalMsgWidth) * 0.5, (borderHeight + borderSize - textHeight) * 0.5 + (j + 1) * fontSize);
+
+		const textOffsetX = (borderWidth + borderSize - totalMsgWidth) * 0.5;
+		const textOffsetY = (borderHeight + borderSize - totalMsgHeight) * 0.5;
+		let startX = 0;
+		let line = 1;
+		for (let j = 0; j < procText.length; j++) {
+			const element = procText[j];
+			// is emote
+			if (element instanceof Image) {
+				const width = (emoteSize / element.height) * element.width;
+				dialogCanvas.drawImage(element, textOffsetX + startX, textOffsetY + (line - 1) * emoteSize, width, emoteSize);
+				startX += emoteSize + emoteGap;
+			}
+			// text
+			else {
+				dialogCanvas.fillText(element, textOffsetX + startX, textOffsetY + line * fontSize);
+				startX += procText[++j];
+			}
+		}
 
 		canvas.drawImage(dialogCanvas.canvas, x, y);
 		needRender = false;
@@ -361,13 +436,13 @@ function Dialog(fontSize, borderSize, font, res) {
 	return {render, setPosition, setBackGroundColor, setText};
 }
 
-function Dino(initX, initY, dinoScale, name, initColor, res, seed) {
+function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 	const cullWidth = 4, cullXLeft = -2, cullYBottom = -5, cullYTop = -4;
 	const Random = new RNG(seed);
 	const speed = 10 * dinoScale;
-	const dialog = new Dialog(20, 16, 'Arial', res);
+	const dialog = new Dialog(20, 16, font, res);
 
-	const nameFontSize = 15, nameFont = `${nameFontSize}px Arial`, nameWidth = getTextWidth(name, nameFont);
+	const nameFontSize = 15, nameFont = `${nameFontSize}px ${font}`, nameWidth = getTextWidth(name, nameFont);
 
 	// for render
 	let dinoRes = [], dinoCanvas;
@@ -763,9 +838,9 @@ function require(url) {
 			const loadImage = new Promise(resolve => image.onload = () => resolve(image));
 			image.src = URL.createObjectURL(await i.blob());
 			return loadImage;
-		} else if (contentType.indexOf('application/json') !== -1)
+		} else if (contentType.startsWith('application/json'))
 			return i.json();
-		else if (contentType.indexOf('application/javascript') !== -1) {
+		else if (contentType.startsWith('application/javascript')) {
 			const script = (await i.text())
 				.replace(/\n?module.exports/, `module_${fileName}`)
 				.replace(/\/\/ ?!!EXCLUDE_IN_WEB\r?\n/g, '//')

@@ -18,7 +18,7 @@ class Command {
 	static CLEARMSG = 13;
 	static HOSTTARGET = 14;
 	static PRIVMSG = 15;
-	static USERINCHANNEL = 16;
+	static USERINCHAT = 16;
 
 	// state
 	static GLOBALUSERSTATE = 100;
@@ -257,7 +257,7 @@ function parseCommand(rawCommandComponent) {
 			break;
 		case '353':  // Tells you who else is in the chat room you're joining.
 			parsedCommand = {
-				type: Command.USERINCHANNEL,
+				type: Command.USERINCHAT,
 				channel: commandParts[1]
 			}
 			break;
