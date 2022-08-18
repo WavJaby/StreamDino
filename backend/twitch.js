@@ -20,7 +20,7 @@ let retryTimer;
 let timeout;
 let requestHeader;
 // emote
-let emoteUrlTemplate;
+let emoteUrlTemplate = 'https://static-cdn.jtvnw.net/emoticons/v2/{{id}}/{{format}}/{{theme_mode}}/{{scale}}';
 // event listener
 let onReady = null, onEvent = null;
 
@@ -117,14 +117,10 @@ function onMessage(data) {
 	}
 }
 
-async function getEmoteFromChannel(broadcasterID) {
-	return await getEmote(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${broadcasterID}`);
-}
-
 /**
  * @param message {string}
  * @param emotesID {{}}
- * @param loadedEmotes {{}}
+ * @param loadedEmotes
  */
 async function getEmoteFromChat(message, emotesID, loadedEmotes) {
 	for (const emote of Object.entries(emotesID)) {
@@ -133,30 +129,44 @@ async function getEmoteFromChat(message, emotesID, loadedEmotes) {
 		if (end === -1 || end > emote[1][0].endPosition + 1)
 			end = emote[1][0].endPosition + 1;
 		let emoteName = message.slice(emote[1][0].startPosition, end);
+
 		// check if already loaded
 		if (emoteName in loadedEmotes) continue;
 
 		const id = emote[0];
-		const format = 'static';
-		const themeMode = 'light';
+		const themeMode = 'dark';
 		const scale = '2.0';
-		const imgUrl = emoteUrlTemplate.replace('{{id}}', id).replace('{{format}}', format).replace('{{theme_mode}}', themeMode).replace('{{scale}}', scale);
-		console.log('Load emote', emoteName, imgUrl);
+		const imgUrlAnimated = getEmoteUrl(id, 'animated', themeMode, scale);
 
-		// load image
-		const image = new Image();
-		const promise = new Promise(resolve => image.onload = resolve);
-		image.src = imgUrl;
-		image.crossOrigin = 'Anonymous';
-		// wait image load;
-		await promise;
+		let image;
+
+		// try to load animated
+		const response = await fetch(imgUrlAnimated).catch(() => null);
+		if (response && response.status >= 200 && response.status <= 299) {
+			image = new GifReader();
+			await response.blob().then(i => i.arrayBuffer()).then(i => image.loadBuffData(i));
+			console.log('Load animated emote', emoteName, id);
+		}
+		if (!image) {
+			// load static image
+			image = new Image();
+			const promise = new Promise(resolve => image.onload = resolve);
+			image.src = getEmoteUrl(id, 'static', themeMode, scale);
+			image.crossOrigin = 'Anonymous';
+			await promise;
+			console.log('Load static emote', emoteName, id);
+		}
+
 		loadedEmotes[emoteName] = {
 			id: id,
 			name: emoteName,
-			imgUrl: imgUrl,
 			img: image
 		}
 	}
+}
+
+async function getEmoteFromChannel(broadcasterID) {
+	return await getEmote(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${broadcasterID}`);
 }
 
 async function getEmoteFromTwitch() {
@@ -165,40 +175,48 @@ async function getEmoteFromTwitch() {
 
 async function getEmote(url) {
 	const emotes = {};
-	const response = await fetch(
-		url,
-		{headers: requestHeader})
-		.then(i => i.json())
-		.then(i => (i.data.map(j => (j = loadEmote(j)) && (emotes[j.name] = j)) && i));
+	const response = await fetch(url, {headers: requestHeader}).then(i => i.json());
 	emoteUrlTemplate = response.template;
-	for (const emote of Object.values(emotes))
-		await emote.loadEmote;
+	for (let emote of response.data)
+		emote = emotes[emote.name] = await loadEmote(emote);
+	// console.log('Load emote', emote.id, emote.name, emote.img instanceof GifReader);
 	return emotes;
 }
 
+function getEmoteUrl(id, format, themeMode, scale) {
+	return emoteUrlTemplate.replace('{{id}}', id).replace('{{format}}', format).replace('{{theme_mode}}', themeMode).replace('{{scale}}', scale);
+}
 
-function loadEmote(data) {
-	let imgUrl;
-	for (let i = 0; i < data.scale.length; i++)
-		if (data.scale[i] === '2.0') {
-			imgUrl = data.images[`url_${data.scale[i][0]}x`];
+async function loadEmote(data) {
+	const themeMode = 'dark';
+	const scale = '2.0';
+	let format = 'static';
+	let animated = false;
+	for (const i of data.format)
+		if (i === 'animated') {
+			format = i;
+			animated = true;
 			break;
 		}
-	if (!imgUrl)
-		imgUrl = data.images[0];
+	const imgUrl = getEmoteUrl(data.id, format, themeMode, scale);
 
 	// load image
-	const image = new Image();
-	const promise = new Promise(resolve => image.onload = resolve);
-	image.src = imgUrl;
-	image.crossOrigin = 'Anonymous';
+	let image;
+	if (animated) {
+		image = new GifReader();
+		await fetch(imgUrl).then(i => i.blob()).then(i => i.arrayBuffer()).then(i => image.loadBuffData(i));
+	} else {
+		image = new Image();
+		const promise = new Promise(resolve => image.onload = resolve);
+		image.src = imgUrl;
+		image.crossOrigin = 'Anonymous';
+		await promise;
+	}
 
 	return {
 		id: data.id,
 		name: data.name,
-		imgUrl: imgUrl,
-		img: image,
-		loadEmote: promise
+		img: image
 	};
 }
 

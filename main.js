@@ -9,6 +9,7 @@ const userDino = {};
 const emotes = {};
 let dinoCount = 0, messageCount = 0;
 let firstDino = null, lastDino;
+let maxDino = 50;
 
 async function initVariable(res, stateData, Twitch) {
 	// get token data
@@ -67,6 +68,21 @@ async function initVariable(res, stateData, Twitch) {
 	stateData.settings = Object.fromEntries(hashString.state.split('&').map(i => i.split('=').map(decodeURIComponent)));
 }
 
+async function initResource(res) {
+	const startTime = perf.now();
+	await loadImageSlice(res, 'res/dino.png');
+
+	// setting page
+	const settingBtn = document.createElement('a');
+	settingBtn.className = 'settingBtn';
+	settingBtn.href = './settings.html';
+	const settingIcon = await require('res/setting_icon.svg');
+	settingBtn.appendChild(settingIcon);
+	document.body.appendChild(settingBtn);
+
+	console.log(`Assets load in: ${(perf.now() - startTime).toFixed(2)}ms`);
+}
+
 /**
  * Twitch listener
  * @param res
@@ -84,6 +100,10 @@ function linkTwitch(res, stateData, Twitch, Command) {
 	async function onReady() {
 		Twitch.sendMessage(`JOIN #${settings.joinChannel}`);
 		Object.assign(emotes, await Twitch.getEmoteFromTwitch());
+
+		// await onEvent(a);
+		// await onEvent(b);
+		// await onEvent(c);
 	}
 
 	async function onEvent(e) {
@@ -162,21 +182,6 @@ function linkTwitch(res, stateData, Twitch, Command) {
 	Twitch.startListen(stateData.accessToken, 1000);
 }
 
-async function initResource(res) {
-	const startTime = perf.now();
-	await loadImageSlice(res, 'res/dino.png');
-
-	// setting page
-	const settingBtn = document.createElement('a');
-	settingBtn.className = 'settingBtn';
-	settingBtn.href = './settings.html';
-	const settingIcon = await require('res/setting_icon.svg');
-	settingBtn.appendChild(settingIcon);
-	document.body.appendChild(settingBtn);
-
-	console.log(`Assets load in: ${(perf.now() - startTime).toFixed(2)}ms`);
-}
-
 function drawFrame(res, canvas) {
 	const blockScale = 2;
 
@@ -203,7 +208,6 @@ function drawFrame(res, canvas) {
 	}
 
 	// render dino
-	let maxDino = 30;
 	let dino = firstDino;
 	let i = 0;
 	while (dino) {
@@ -236,6 +240,7 @@ function Dialog(fontSize, font, res) {
 
 	// live change
 	const procText = [];
+	const gifEmotes = [];
 	let text, totalMsgWidth, totalMsgHeight;
 	let bgColor;
 	let lastHandePos, originalX, x, y;
@@ -294,6 +299,7 @@ function Dialog(fontSize, font, res) {
 	function setText(newText, messageEmotes) {
 		if (!newText) {
 			showDialog = false;
+			needRender = false;
 			text = null;
 		} else if (newText !== text) {
 			text = newText;
@@ -302,7 +308,7 @@ function Dialog(fontSize, font, res) {
 			totalMsgWidth = 0;
 			let lineBreaks = 1;
 
-			if (emotes && messageEmotes) {
+			if (messageEmotes) {
 				const emotePosList = [];
 
 				// flatten message emote list
@@ -310,10 +316,10 @@ function Dialog(fontSize, font, res) {
 					// get emote name
 					const emoteNameStart = parseInt(emoteInfo[1][0].startPosition);
 					const emoteNameEnd = parseInt(emoteInfo[1][0].endPosition) + 1;
-					let end = newText.indexOf(' ', emoteNameStart);
-					if (end === -1 || end > emoteNameEnd)
-						end = emoteNameEnd;
-					let emoteName = newText.slice(emoteNameStart, end);
+					// let end = newText.indexOf(' ', emoteNameStart);
+					// if (end === -1 || end > emoteNameEnd)
+					// 	end = emoteNameEnd;
+					let emoteName = newText.slice(emoteNameStart, emoteNameEnd);
 
 					// get emote
 					const emote = emotes[emoteName];
@@ -338,8 +344,7 @@ function Dialog(fontSize, font, res) {
 					// add emote
 					const emote = emoteInfo[2];
 					procText.push(emote);
-					const width = (emoteSize / emote.height) * emote.width;
-					totalMsgWidth += (lastTextPos < newText.length) ? (width + emoteGap) : width;
+					totalMsgWidth += (lastTextPos < newText.length) ? (emoteSize + emoteGap) : emoteSize;
 				}
 				if (lastTextPos < newText.length) {
 					const text = newText.slice(lastTextPos);
@@ -362,7 +367,6 @@ function Dialog(fontSize, font, res) {
 			borderHeight = Math.ceil(totalMsgHeight / borderSizeY) * borderSizeY + borderSizeX * 2;
 
 			dialogCanvas = createCanvas(borderWidth, borderHeight);
-			dialogCanvas.fillStyle = 'white';
 			dialogCanvas.font = font;
 
 			showDialog = true;
@@ -379,6 +383,14 @@ function Dialog(fontSize, font, res) {
 		if (!showDialog || !dialogCanvas) return null;
 
 		if (!needRender) {
+			// update gif
+			if (gifEmotes.length > 0)
+				dialogCanvas.fillStyle = '#' + bgColor.toString(16);
+			for (const emoteInfo of gifEmotes) {
+				const canvas = emoteInfo[0].decodeAndBlitFrameRGBA();
+				dialogCanvas.fillRect(emoteInfo[1], emoteInfo[2], emoteInfo[3], emoteInfo[4]);
+				dialogCanvas.drawImage(canvas, emoteInfo[1], emoteInfo[2], emoteInfo[3], emoteInfo[4]);
+			}
 			canvas.drawImage(dialogCanvas.canvas, x, y);
 			return [x, y];
 		}
@@ -439,29 +451,37 @@ function Dialog(fontSize, font, res) {
 		}
 		dialogCanvas.putImageData(imgData, 0, 0);
 
-		// text
-		// for (let j = 0; j < lines.length; j++)
-		// 	dialogCanvas.fillText(lines[j], (borderWidth + borderSize - totalMsgWidth) * 0.5, (borderHeight + borderSize - textHeight) * 0.5 + (j + 1) * fontSize);
-
 		const textOffsetX = (borderWidth - totalMsgWidth) * 0.5 + paddingX;
 		const textOffsetY = (borderHeight - totalMsgHeight) * 0.5 + paddingY;
 		let startX = 0;
 		let line = 1;
+		gifEmotes.length = 0;
 		for (let j = 0; j < procText.length; j++) {
 			const element = procText[j];
 			// is emote
 			if (element instanceof Image) {
-				const width = (emoteSize / element.height) * element.width;
-				dialogCanvas.drawImage(element, textOffsetX + startX, textOffsetY + (line - 1) * emoteSize, width, emoteSize);
+				const height = (emoteSize / element.width) * element.height;
+				const offsetY = height !== emoteSize ? ((emoteSize - height) / 2) : 0;
+				dialogCanvas.drawImage(element, textOffsetX + startX, textOffsetY + (line - 1) * emoteSize + offsetY, emoteSize, height);
+				startX += emoteSize + emoteGap;
+			}
+			// is emote
+			else if (element instanceof GifReader) {
+				const height = (emoteSize / element.width) * element.height;
+				const offsetY = height !== emoteSize ? ((emoteSize - height) / 2) : 0;
+				const canvas = element.decodeAndBlitFrameRGBA();
+				const emoteInfo = [element, textOffsetX + startX, textOffsetY + (line - 1) * emoteSize + offsetY, emoteSize, height];
+				gifEmotes.push(emoteInfo);
+				dialogCanvas.drawImage(canvas, emoteInfo[1], emoteInfo[2], emoteInfo[3], emoteInfo[4]);
 				startX += emoteSize + emoteGap;
 			}
 			// text
 			else {
+				dialogCanvas.fillStyle = 'white';
 				dialogCanvas.fillText(element, textOffsetX + startX, textOffsetY + line * fontSize);
 				startX += procText[++j];
 			}
 		}
-
 		canvas.drawImage(dialogCanvas.canvas, x, y);
 		needRender = false;
 		return [x, y];
