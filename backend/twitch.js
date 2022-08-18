@@ -15,9 +15,12 @@ const endpointURL = 'wss://irc-ws.chat.twitch.tv:443';
 const username = 'WavJaby\'s_Bot';
 let client;
 let token;
+// websocket connection
 let retryTimer;
 let timeout;
 let requestHeader;
+// emote
+let emoteUrlTemplate;
 // event listener
 let onReady = null, onEvent = null;
 
@@ -114,23 +117,65 @@ function onMessage(data) {
 	}
 }
 
-function getChannelEmote(broadcasterID) {
-	const emotes = {};
-	return fetch(
-		`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${broadcasterID}`,
-		{headers: requestHeader})
-		.then(i => i.json())
-		.then(i => Promise.all(i.data.map(j => ((j = loadEmote(j)) && (emotes[j.name] = j)).loadEmote)) && emotes);
+async function getEmoteFromChannel(broadcasterID) {
+	return await getEmote(`https://api.twitch.tv/helix/chat/emotes?broadcaster_id=${broadcasterID}`);
 }
 
-function getTwitchEmote() {
+/**
+ * @param message {string}
+ * @param emotesID {{}}
+ * @param loadedEmotes {{}}
+ */
+async function getEmoteFromChat(message, emotesID, loadedEmotes) {
+	for (const emote of Object.entries(emotesID)) {
+		// get emote name
+		let end = message.indexOf(' ', emote[1][0].startPosition);
+		if (end === -1 || end > emote[1][0].endPosition + 1)
+			end = emote[1][0].endPosition + 1;
+		let emoteName = message.slice(emote[1][0].startPosition, end);
+		// check if already loaded
+		if (emoteName in loadedEmotes) continue;
+
+		const id = emote[0];
+		const format = 'static';
+		const themeMode = 'light';
+		const scale = '2.0';
+		const imgUrl = emoteUrlTemplate.replace('{{id}}', id).replace('{{format}}', format).replace('{{theme_mode}}', themeMode).replace('{{scale}}', scale);
+		console.log('Load emote', emoteName, imgUrl);
+
+		// load image
+		const image = new Image();
+		const promise = new Promise(resolve => image.onload = resolve);
+		image.src = imgUrl;
+		image.crossOrigin = 'Anonymous';
+		// wait image load;
+		await promise;
+		loadedEmotes[emoteName] = {
+			id: id,
+			name: emoteName,
+			imgUrl: imgUrl,
+			img: image
+		}
+	}
+}
+
+async function getEmoteFromTwitch() {
+	return await getEmote('https://api.twitch.tv/helix/chat/emotes/global');
+}
+
+async function getEmote(url) {
 	const emotes = {};
-	return fetch(
-		'https://api.twitch.tv/helix/chat/emotes/global',
+	const response = await fetch(
+		url,
 		{headers: requestHeader})
 		.then(i => i.json())
-		.then(i => Promise.all(i.data.map(j => ((j = loadEmote(j)) && (emotes[j.name] = j)).loadEmote)) && emotes);
+		.then(i => (i.data.map(j => (j = loadEmote(j)) && (emotes[j.name] = j)) && i));
+	emoteUrlTemplate = response.template;
+	for (const emote of Object.values(emotes))
+		await emote.loadEmote;
+	return emotes;
 }
+
 
 function loadEmote(data) {
 	let imgUrl;
@@ -210,8 +255,9 @@ function getAccessToken(option) {
 module.exports = {
 	startListen,
 	getAccessToken,
-	getChannelEmote,
-	getTwitchEmote,
+	getEmoteFromChannel,
+	getEmoteFromChat,
+	getEmoteFromTwitch,
 	setOnEvent,
 	setOnReady,
 	sendMessage,

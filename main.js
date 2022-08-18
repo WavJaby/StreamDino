@@ -32,6 +32,7 @@ async function initVariable(res, stateData, Twitch) {
 				.then(i => i.ok ? i.json() : null);
 			// is valid
 			if (validate) {
+				console.log(validate);
 				// change settings
 				if (queryString)
 					hashString.state = queryString;
@@ -82,23 +83,23 @@ function linkTwitch(res, stateData, Twitch, Command) {
 
 	async function onReady() {
 		Twitch.sendMessage(`JOIN #${settings.joinChannel}`);
-		Object.assign(emotes, await Twitch.getTwitchEmote());
+		Object.assign(emotes, await Twitch.getEmoteFromTwitch());
 	}
 
 	async function onEvent(e) {
 		// debug
-		// const debugObj = JSON.parse(JSON.stringify(e));
-		// for (const key in Command)
-		// 	if (Command[key] === debugObj.command.type) {
-		// 		debugObj.command.type = key;
-		// 		break;
-		// 	}
-		// console.log(debugObj);
+		const debugObj = JSON.parse(JSON.stringify(e));
+		for (const key in Command)
+			if (Command[key] === debugObj.command.type) {
+				debugObj.command.type = key;
+				break;
+			}
+		console.log(debugObj);
 
 		switch (e.command.type) {
 			case Command.ROOMSTATE: {
 				roomID = e.tags['room-id'];
-				Object.assign(emotes, await Twitch.getChannelEmote(roomID));
+				Object.assign(emotes, await Twitch.getEmoteFromChannel(roomID));
 				break;
 			}
 			case Command.PRIVMSG: {
@@ -123,8 +124,14 @@ function linkTwitch(res, stateData, Twitch, Command) {
 					dino.pre = dino.next = null;
 					dinoCount++;
 				}
-				dino.say(e.parameters, 5);
+				// get emote if message have emotes from other channel
+				if (e.tags.emotes)
+					await Twitch.getEmoteFromChat(e.parameters, e.tags.emotes, emotes);
+				// make dino say the message
+				dino.say(e.parameters, 5, e.tags.emotes);
 				dino.id = messageCount++;
+
+				// add dino to linked list
 				if (firstDino === null) {
 					firstDino = lastDino = dino;
 				} else if (dino !== lastDino) {
@@ -158,6 +165,8 @@ function linkTwitch(res, stateData, Twitch, Command) {
 async function initResource(res) {
 	const startTime = perf.now();
 	await loadImageSlice(res, 'res/dino.png');
+
+	// setting page
 	const settingBtn = document.createElement('a');
 	settingBtn.className = 'settingBtn';
 	settingBtn.href = './settings.html';
@@ -204,7 +213,6 @@ function drawFrame(res, canvas) {
 	}
 }
 
-
 function Dialog(fontSize, font, res) {
 	const msgBoxTop = res.msgBoxTop;
 	const msgBoxBtm = res.msgBoxBtm;
@@ -215,8 +223,8 @@ function Dialog(fontSize, font, res) {
 	const texturePadding = 6;
 	const borderSizeX = 16;
 	const borderSizeY = 8;
-	const paddingX = -5;
-	const paddingY = -5;
+	const paddingX = -4;
+	const paddingY = -4;
 	const textHeight = fontSize * 1.25;
 	const emoteSize = textHeight;
 	const emoteGap = 2;
@@ -281,44 +289,63 @@ function Dialog(fontSize, font, res) {
 
 	/**
 	 * @param newText {string|null}
+	 * @param messageEmotes {{}|null}
 	 */
-	function setText(newText) {
+	function setText(newText, messageEmotes) {
 		if (!newText) {
 			showDialog = false;
+			text = null;
 		} else if (newText !== text) {
 			text = newText;
 
 			procText.length = 0;
 			totalMsgWidth = 0;
 			let lineBreaks = 1;
-			if (emotes) {
-				const splitText = text.split(' ');
-				const textCache = [];
-				for (let i = 0; i < splitText.length + 1; i++) {
-					const lastElement = i === splitText.length;
-					const text = lastElement ? null : splitText[i];
-					const isEmote = lastElement ? null : emotes[text];
-					// add emote
-					if (isEmote || lastElement) {
-						// add textCache and emote
-						if (textCache.length > 0) {
-							const joinedText = textCache.join(' ')
-							let textWidth = getTextWidth(joinedText, font);
-							if (!lastElement) textWidth += emoteGap;
-							procText.push(joinedText, textWidth);
-							totalMsgWidth += textWidth;
-							textCache.length = 0;
-						}
-						// add emote
-						if (isEmote) {
-							procText.push(isEmote.img);
-							const width = (emoteSize / isEmote.img.height) * isEmote.img.width;
-							totalMsgWidth += lastElement ? width : (width + emoteGap);
-						}
+
+			if (emotes && messageEmotes) {
+				const emotePosList = [];
+
+				// flatten message emote list
+				for (const emoteInfo of Object.entries(messageEmotes)) {
+					// get emote name
+					const emoteNameStart = parseInt(emoteInfo[1][0].startPosition);
+					const emoteNameEnd = parseInt(emoteInfo[1][0].endPosition) + 1;
+					let end = newText.indexOf(' ', emoteNameStart);
+					if (end === -1 || end > emoteNameEnd)
+						end = emoteNameEnd;
+					let emoteName = newText.slice(emoteNameStart, end);
+
+					// get emote
+					const emote = emotes[emoteName];
+					if (emote)
+						for (const position of emoteInfo[1])
+							emotePosList.push([parseInt(position.startPosition), parseInt(position.endPosition), emote.img]);
+				}
+				emotePosList.sort((a, b) => a[0] - b[0]);
+
+				// split message
+				let lastTextPos = 0;
+				for (const emoteInfo of emotePosList) {
+					const textEnd = emoteInfo[0];
+					if (textEnd > lastTextPos) {
+						const text = newText.slice(lastTextPos, lastTextPos === 0 ? (textEnd - 1) : textEnd);
+						const textWidth = getTextWidth(text, font) + emoteGap;
+						procText.push(text, textWidth);
+						totalMsgWidth += textWidth;
 					}
-					// add text
-					else
-						textCache.push(text);
+					lastTextPos = emoteInfo[1] + 2;
+
+					// add emote
+					const emote = emoteInfo[2];
+					procText.push(emote);
+					const width = (emoteSize / emote.height) * emote.width;
+					totalMsgWidth += (lastTextPos < newText.length) ? (width + emoteGap) : width;
+				}
+				if (lastTextPos < newText.length) {
+					const text = newText.slice(lastTextPos);
+					const textWidth = getTextWidth(text, font);
+					procText.push(text, textWidth);
+					totalMsgWidth += textWidth;
 				}
 			} else {
 				totalMsgWidth = getTextWidth(text, font);
@@ -504,10 +531,10 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 		// console.log('update dino state');
 	}
 
-	function say(newText, showSec) {
+	function say(newText, showSec, messageEmotes) {
 		dialogCloseDelay = nowFps * showSec;
 		lastDialogFrame = frameCount;
-		dialog.setText(newText);
+		dialog.setText(newText, messageEmotes);
 	}
 
 	function setNextState() {
@@ -661,7 +688,7 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 		// render dialog
 		if (dialogCloseDelay !== -1 && frameCount - lastDialogFrame > dialogCloseDelay) {
 			dialogCloseDelay = -1;
-			dialog.setText(null);
+			dialog.setText(null, null);
 		}
 		dialog.setPosition(x + (facingNormal ? (textureW - cullWidth * dinoScale) : 0), finalY, facingNormal);
 		const location = dialog.render(canvas);
