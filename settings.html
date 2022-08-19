@@ -129,18 +129,28 @@
 		 */
 		function copyToClipboard(element) {
 			const typesArray = [];
-			for (const child of settingsFolder) {
+			for (const child of settingsFolder.children) {
+				if (child.tagName === 'DIV' && child.className === 'section') {
+					console.log(child.children)
+					for (const childI of child.children)
+						if (extractChildren(childI)) return;
+				} else if (extractChildren(child)) return;
+			}
+
+			function extractChildren(child) {
 				if (child.tagName === 'INPUT' && child.name) {
 					if (!child.value || child.value.length === 0) {
 						if (child.required) {
 							child.reportValidity();
-							return;
+							return true;
 						} else
-							continue;
+							return false;
 					}
 					typesArray.push(child.name + '=' + encodeURIComponent(child.value));
 				}
+				return false;
 			}
+
 			const text = `${new URL(form.action).href}?${typesArray.join('&')}`;
 			navigator.clipboard.writeText(text).then(
 				function () {
