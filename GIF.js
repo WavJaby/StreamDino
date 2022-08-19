@@ -36,7 +36,7 @@ function GifReader() {
 	let loop_count = null;
 
 	let startTime = -1;
-	let gifTime = 0;
+	let nextFrameTime = 0;
 	let frameNum = 0;
 	let frame;
 	let canvas;
@@ -182,7 +182,7 @@ function GifReader() {
 						data_length: p - data_offset,
 						transparent_index: transparent_index,
 						interlaced: !!interlace_flag,
-						delay: delay,
+						delay: delay === 0 ? 10 : delay,
 						disposal: disposal
 					});
 					break;
@@ -197,7 +197,7 @@ function GifReader() {
 		}
 		// set to first frame
 		frame = frames[0];
-		startTime = perf.now();
+		nextFrameTime = -1;
 	}
 
 	this.numFrames = function () {
@@ -217,17 +217,17 @@ function GifReader() {
 	this.decodeAndBlitFrameRGBA = function () {
 		const timePass = perf.now() - startTime;
 		// not change frame
-		if (timePass < gifTime + frame.delay * 10)
+		if (timePass < nextFrameTime)
 			return canvas.canvas;
-		gifTime += frame.delay * 10;
-
-		// get frame info
-		frame = this.frameInfo(frameNum++);
 		if (frameNum === frames.length) {
 			frameNum = 0;
 			startTime = perf.now();
-			gifTime = 0;
-		}
+			nextFrameTime = frame.delay * 10;
+		} else
+			nextFrameTime += frame.delay * 10;
+
+		// get frame info
+		frame = this.frameInfo(frameNum++);
 
 		const num_pixels = frame.width * frame.height;
 		const index_stream = new Uint8Array(num_pixels);  // At most 8-bit indices.

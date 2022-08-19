@@ -54,7 +54,7 @@ function startListen(accessToken, timeoutTime) {
 		timeout = timeoutTime;
 
 	requestHeader = {
-		'Authorization': `Bearer ${accessToken}`,
+		'Authorization': `Bearer ${token}`,
 		'Client-Id': clientID
 	};
 
@@ -63,7 +63,7 @@ function startListen(accessToken, timeoutTime) {
 		if (client)
 			client.close();
 	}, timeout);
-	connectToTwitch(accessToken, retryTimer);
+	connectToTwitch(token, retryTimer);
 }
 
 function connectToTwitch() {
@@ -175,11 +175,13 @@ async function getEmoteFromTwitch() {
 
 async function getEmote(url) {
 	const emotes = {};
-	const response = await fetch(url, {headers: requestHeader}).then(i => i.json());
-	emoteUrlTemplate = response.template;
-	for (let emote of response.data)
-		emote = emotes[emote.name] = await loadEmote(emote);
-	// console.log('Load emote', emote.id, emote.name, emote.img instanceof GifReader);
+	const response = await fetch(url, {headers: requestHeader}).then(i => i.json()).catch(() => null);
+	if (response && !('error' in response)) {
+		emoteUrlTemplate = response.template;
+		for (let emote of response.data)
+			emote = emotes[emote.name] = await loadEmote(emote);
+		// console.log('Load emote', emote.id, emote.name, emote.img instanceof GifReader);
+	}
 	return emotes;
 }
 

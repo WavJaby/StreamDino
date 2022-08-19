@@ -100,6 +100,7 @@ function linkTwitch(res, stateData, Twitch, Command) {
 	async function onReady() {
 		Twitch.sendMessage(`JOIN #${settings.joinChannel}`);
 		Object.assign(emotes, await Twitch.getEmoteFromTwitch());
+		console.log('Loaded emote from Twitch');
 	}
 
 	async function onEvent(e) {
@@ -116,6 +117,7 @@ function linkTwitch(res, stateData, Twitch, Command) {
 			case Command.ROOMSTATE: {
 				roomID = e.tags['room-id'];
 				Object.assign(emotes, await Twitch.getEmoteFromChannel(roomID));
+				console.log('Loaded emote from Channel');
 				break;
 			}
 			case Command.PRIVMSG: {

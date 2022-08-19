@@ -4,6 +4,7 @@ const parameters = [
 		type: 'text',
 		require: true,
 		displayName: 'Channel to join',
+		description: '',
 		defaultValue: null,
 		placeholder: 'Channel Name',
 	},
@@ -12,6 +13,7 @@ const parameters = [
 		type: 'number',
 		require: false,
 		displayName: 'Max Dino size',
+		description: '',
 		defaultValue: 1,
 		min: 1,
 		max: 10,
@@ -19,7 +21,25 @@ const parameters = [
 ];
 
 function parseSetting(queryString) {
-	const settings = Object.fromEntries(queryString.split('&').map(i => i.split('=').map(decodeURIComponent)));
+	const settings = Object.fromEntries(queryString.split('&').map(i => {
+		const pair = i.split('=').map(decodeURIComponent);
+		const value = pair[1];
+		let isNum = true, isFloat = true;
+		for (let j = 0; j < value.length; j++) {
+			const chr = value.charCodeAt(j);
+			if (isNum && (chr < 0x30 || chr > 0x39) && chr !== 0x2B && chr !== 0x2D)
+				isNum = false;
+			else if (isFloat && chr !== 0x2E && chr !== 0x45 && chr !== 0x65) {
+				isFloat = false;
+				break;
+			}
+		}
+		if (isNum)
+			pair[1] = parseInt(value);
+		else if (isFloat)
+			pair[1] = parseFloat(value);
+		return pair;
+	}));
 	for (const par of parameters) {
 		if (!(par.name in settings)) {
 			if (par.require) {
@@ -29,7 +49,6 @@ function parseSetting(queryString) {
 			settings[par.name] = par.placeholder ? par.placeholder : null;
 		}
 	}
-
 	return settings;
 }
 

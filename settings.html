@@ -124,7 +124,7 @@
 						} else
 							continue;
 					}
-					typesArray.push(child.name + '=' + child.value);
+					typesArray.push(child.name + '=' + encodeURIComponent(child.value));
 				}
 			}
 			const text = `${new URL(form.action).href}?${typesArray.join('&')}`;
