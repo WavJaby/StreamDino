@@ -46,7 +46,7 @@ async function initVariable(res, stateData, Twitch) {
 
 	// no state given and token data not valid
 	if (!hashString && !queryString) {
-		window.open('settings.html', '_self');
+		window.location.replace('settings.html');
 		return null;
 	}
 
@@ -65,7 +65,7 @@ async function initVariable(res, stateData, Twitch) {
 	// read and store token data
 	localStorage.setItem('tokenData', JSON.stringify(hashString));
 	stateData.accessToken = hashString.access_token;
-	stateData.settings = Object.fromEntries(hashString.state.split('&').map(i => i.split('=').map(decodeURIComponent)));
+	stateData.settings = parseSetting(hashString.state);
 }
 
 async function initResource(res) {
@@ -406,8 +406,8 @@ function Dialog(res) {
 			if (gifEmotes.length > 0)
 				dialogCanvas.fillStyle = hexColor;
 			for (const emoteInfo of gifEmotes) {
-				const canvas = emoteInfo[0].decodeAndBlitFrameRGBA();
 				dialogCanvas.fillRect(emoteInfo[1], emoteInfo[2], emoteInfo[3], emoteInfo[4]);
+				const canvas = emoteInfo[0].decodeAndBlitFrameRGBA();
 				dialogCanvas.drawImage(canvas, emoteInfo[1], emoteInfo[2], emoteInfo[3], emoteInfo[4]);
 			}
 			canvas.drawImage(dialogCanvas.canvas, x, y);
@@ -770,6 +770,7 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 	canvasEle.className = 'mainCanvas';
 	const canvas = canvasEle.getContext('2d');
 	window.onload = function () {
+		resizeCanvas();
 		document.body.appendChild(canvasEle);
 	}
 
@@ -789,7 +790,6 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 	const fps = new Float32Array(4);
 	// load resource
 	await initResource(res);
-	resizeCanvas();
 	renderFrame();
 
 	function renderFrame() {

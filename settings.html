@@ -4,6 +4,7 @@
 	<meta charset="UTF-8">
 	<title>Settings</title>
 	<link href="res/icon.png" rel="icon">
+	<script src="SettingParser.js"></script>
 	<style>
 		html, body {
 			width: 100%;
@@ -28,7 +29,7 @@
 			--button_hover_bg: #772ce8;
 		}
 
-		h2 {
+		.title {
 			font-size: 38px;
 			margin: 0 0 10px 0;
 		}
@@ -95,41 +96,26 @@
 </head>
 <body>
 <div>
-	<form action=".">
-		<h2>Stream Dino Settings</h2>
-		<label for="joinChannelInput">Channel to join</label>
-		<input type="text" id="joinChannelInput" class="inputField focusGlow"
-			   required name="joinChannel" placeholder="Channel Name">
-
-		<label for="maxDinoScaleInput">Max Dino size</label>
-		<input type="number" id="maxDinoScaleInput" class="inputField focusGlow"
-			   required name="maxDinoScale" min=1 max=10 value=1>
-
-
+	<form id="form" action=".">
+		<h2 class="title">Stream Dino Settings</h2>
+		<div id="settings"></div>
 		<input type="submit" class="button focusGlow" value="Save">
 		<input type="button" class="button focusGlow" onclick="copyToClipboard(this)" value="Copy link">
 	</form>
 	<script>
 		// init
 		let tokenData = localStorage.getItem('tokenData');
-		if (tokenData) {
-			tokenData = JSON.parse(tokenData);
-			if (tokenData && tokenData.state) {
-				const settings = Object.fromEntries(tokenData.state.split('&').map(i => i.split('=').map(decodeURIComponent)));
-				for (const child of document.body.getElementsByTagName('form')[0].children) {
-					if (child.tagName === 'INPUT' && settings[child.name]) {
-						child.value = settings[child.name];
-					}
-				}
-			}
-		}
+		const form = document.getElementById('form');
+		const settingsFolder = document.getElementById('settings');
+
+		createSetting(settingsFolder);
 
 		/**
 		 * @param element {HTMLInputElement}
 		 */
 		function copyToClipboard(element) {
 			const typesArray = [];
-			for (const child of element.parentNode.children) {
+			for (const child of settingsFolder) {
 				if (child.tagName === 'INPUT' && child.name) {
 					if (!child.value || child.value.length === 0) {
 						if (child.required) {
@@ -141,7 +127,7 @@
 					typesArray.push(child.name + '=' + child.value);
 				}
 			}
-			const text = `${new URL(element.parentNode.action).href}?${typesArray.join('&')}`;
+			const text = `${new URL(form.action).href}?${typesArray.join('&')}`;
 			navigator.clipboard.writeText(text).then(
 				function () {
 					alert('Copying to clipboard was successful!');

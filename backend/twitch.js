@@ -221,7 +221,7 @@ async function loadEmote(data) {
 }
 
 /**
- * @param option {{clientID:string, scopes:[string], redirectUri: string, [state]: string}}
+ * @param option {{redirectUri: string, scopes: string[], state: string}}
  * @return {Promise<unknown> | null}
  */
 function getAccessToken(option) {
@@ -231,7 +231,7 @@ function getAccessToken(option) {
 
 	// for web
 	if (window) {
-		window.open(authUrl, '_self');
+		window.location.replace(authUrl);
 		return null;
 	}
 	// for back end
