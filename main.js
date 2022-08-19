@@ -100,10 +100,6 @@ function linkTwitch(res, stateData, Twitch, Command) {
 	async function onReady() {
 		Twitch.sendMessage(`JOIN #${settings.joinChannel}`);
 		Object.assign(emotes, await Twitch.getEmoteFromTwitch());
-
-		// await onEvent(a);
-		// await onEvent(b);
-		// await onEvent(c);
 	}
 
 	async function onEvent(e) {
@@ -131,7 +127,7 @@ function linkTwitch(res, stateData, Twitch, Command) {
 
 				// give random color if user don't have
 				if (!userData.color)
-					userData.color = '#' + ((Math.random() * 0xFFFFFF) | 0).toString(16);
+					userData.color = '#' + ((Math.random() * 0xFFFFFF) | 0).toString(16).padStart(6, '0');
 
 				// create Dino
 				let dino;
@@ -147,6 +143,10 @@ function linkTwitch(res, stateData, Twitch, Command) {
 				// get emote if message have emotes from other channel
 				if (e.tags.emotes)
 					await Twitch.getEmoteFromChat(e.parameters, e.tags.emotes, emotes);
+				const messageType = e.tags && e.tags['msg-id'];
+				if (messageType) {
+
+				}
 				// make dino say the message
 				dino.say(e.parameters, 5, e.tags.emotes);
 				dino.id = messageCount++;
@@ -217,7 +217,7 @@ function drawFrame(res, canvas) {
 	}
 }
 
-function Dialog(fontSize, font, res) {
+function Dialog(res) {
 	const msgBoxTop = res.msgBoxTop;
 	const msgBoxBtm = res.msgBoxBtm;
 	const msgBoxMid = res.msgBoxMid;
@@ -229,11 +229,13 @@ function Dialog(fontSize, font, res) {
 	const borderSizeY = 8;
 	const paddingX = -4;
 	const paddingY = -4;
-	const textHeight = fontSize * 1.25;
-	const emoteSize = textHeight;
 	const emoteGap = 2;
 
-	font = `${fontSize}px ${font}`;
+	// font
+	let font;
+	let fontSize;
+	let textHeight;
+	let emoteSize;
 	// dialog size
 	let borderWidth, borderHeight;
 	let dialogCanvas;
@@ -242,7 +244,7 @@ function Dialog(fontSize, font, res) {
 	const procText = [];
 	const gifEmotes = [];
 	let text, totalMsgWidth, totalMsgHeight;
-	let bgColor;
+	let bgColor, hexColor;
 	let lastHandePos, originalX, x, y;
 	let needRender = false;
 	let showDialog = false;
@@ -283,11 +285,28 @@ function Dialog(fontSize, font, res) {
 	}
 
 	/**
-	 * @param newBgColor {number}
+	 * @param newFontSize {number}
+	 * @param fontName {string}
 	 */
-	function setBackGroundColor(newBgColor) {
+	function setFont(newFontSize, fontName) {
+		const newFont = `${newFontSize}px ${fontName}`;
+		if (newFont !== font) {
+			font = newFont;
+			fontSize = newFontSize;
+			textHeight = fontSize * 1.25;
+			emoteSize = textHeight;
+			needRender = true;
+		}
+	}
+
+	/**
+	 * @param newBgColor {number}
+	 * @param newHexColor {string}
+	 */
+	function setBackGroundColor(newBgColor, newHexColor) {
 		if (newBgColor !== bgColor) {
 			bgColor = newBgColor;
+			hexColor = newHexColor;
 			needRender = true;
 		}
 	}
@@ -385,7 +404,7 @@ function Dialog(fontSize, font, res) {
 		if (!needRender) {
 			// update gif
 			if (gifEmotes.length > 0)
-				dialogCanvas.fillStyle = '#' + bgColor.toString(16);
+				dialogCanvas.fillStyle = hexColor;
 			for (const emoteInfo of gifEmotes) {
 				const canvas = emoteInfo[0].decodeAndBlitFrameRGBA();
 				dialogCanvas.fillRect(emoteInfo[1], emoteInfo[2], emoteInfo[3], emoteInfo[4]);
@@ -487,20 +506,20 @@ function Dialog(fontSize, font, res) {
 		return [x, y];
 	}
 
-	return {render, setPosition, setBackGroundColor, setText};
+	return {render, setPosition, setBackGroundColor, setText, setFont};
 }
 
-function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
+function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 	const cullWidth = 4, cullXLeft = -2, cullYBottom = -5, cullYTop = -4;
 	const Random = new RNG(seed);
 	const speed = 10 * dinoScale;
-	const dialog = new Dialog(20, font, res);
+	const dialog = new Dialog(res);
 
 	const marginX = 10;
 	const marginY = 3;
 	const fontSize = 12;
-	const nameFont = `${fontSize}px ${font}`;
-	const nameWidth = getTextWidth(name, nameFont);
+	const font = `${fontSize}px ${fontName}`;
+	const nameWidth = getTextWidth(name, font);
 	const textHeight = fontSize * 1.25;
 
 	// for render
@@ -519,13 +538,6 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 	let dinoColor, dinoColorHex;
 	// dialog
 	let lastDialogFrame = frameCount, dialogCloseDelay = -1;
-
-	function setDinoColor(colorHex) {
-		dinoColorHex = colorHex;
-		dinoColor = parseInt(colorHex.slice(1), 16);
-		dialog.setBackGroundColor(dinoColor);
-		initDinoRes();
-	}
 
 	function initDinoRes() {
 		// render res
@@ -551,6 +563,13 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 		// console.log('update dino state');
 	}
 
+	function setDinoColor(newColorHex) {
+		dinoColorHex = newColorHex;
+		dinoColor = parseInt(newColorHex.slice(1), 16);
+		dialog.setBackGroundColor(dinoColor, newColorHex);
+		initDinoRes();
+	}
+
 	function say(newText, showSec, messageEmotes) {
 		dialogCloseDelay = nowFps * showSec;
 		lastDialogFrame = frameCount;
@@ -573,6 +592,7 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 	}
 
 	/**
+	 * Render Dino
 	 * @param canvas {CanvasRenderingContext2D}
 	 */
 	function render(canvas) {
@@ -714,19 +734,19 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 		const location = dialog.render(canvas);
 
 		// render name
-		canvas.font = nameFont;
+		canvas.font = font;
 		const bgHeight = textHeight + marginY * 2;
 		const r = bgHeight * 0.5;
 		if (location === null) {
 			const finalX = (x + cullXLeft * dinoScale) + (textureW - nameWidth) * 0.5;
 			canvas.fillStyle = '#000000E0';
-			canvas.roundRect(finalX, finalY - textHeight - marginY, getTextWidth(name, nameFont) + marginX * 2, bgHeight, r).fill();
+			canvas.roundRect(finalX, finalY - textHeight - marginY, getTextWidth(name, font) + marginX * 2, bgHeight, r).fill();
 			canvas.fillStyle = 'white';
 			canvas.fillText(name, finalX + marginX, finalY - textHeight + fontSize);
 		} else {
 			const finalX = location[0] + 10;
 			canvas.fillStyle = '#000000E0';
-			canvas.roundRect(finalX, location[1] - fontSize - marginY, getTextWidth(name, nameFont) + marginX * 2, bgHeight, r).fill();
+			canvas.roundRect(finalX, location[1] - fontSize - marginY, getTextWidth(name, font) + marginX * 2, bgHeight, r).fill();
 			canvas.fillStyle = 'white';
 			canvas.fillText(name, finalX + marginX, location[1]);
 		}
@@ -739,6 +759,7 @@ function Dino(initX, initY, dinoScale, name, initColor, font, res, seed) {
 	setNextBlink();
 	setNextState();
 	setDinoColor(initColor);
+	dialog.setFont(20, fontName);
 	setState(0);
 	return {render, setDinoColor, say};
 }
