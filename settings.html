@@ -131,7 +131,6 @@
 			const typesArray = [];
 			for (const child of settingsFolder.children) {
 				if (child.tagName === 'DIV' && child.className === 'section') {
-					console.log(child.children)
 					for (const childI of child.children)
 						if (extractChildren(childI)) return;
 				} else if (extractChildren(child)) return;
