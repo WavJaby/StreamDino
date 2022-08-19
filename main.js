@@ -9,7 +9,7 @@ const userDino = {};
 const emotes = {};
 let dinoCount = 0, messageCount = 0;
 let firstDino = null, lastDino;
-let maxDino = 50;
+let settings;
 
 async function initVariable(res, stateData, Twitch) {
 	// get token data
@@ -65,7 +65,7 @@ async function initVariable(res, stateData, Twitch) {
 	// read and store token data
 	localStorage.setItem('tokenData', JSON.stringify(hashString));
 	stateData.accessToken = hashString.access_token;
-	stateData.settings = parseSetting(hashString.state);
+	settings = parseSetting(hashString.state);
 }
 
 async function initResource(res) {
@@ -92,7 +92,6 @@ async function initResource(res) {
  */
 function linkTwitch(res, stateData, Twitch, Command) {
 	const usersData = {};
-	const settings = stateData.settings;
 	let roomID;
 
 	console.log(settings);
@@ -146,7 +145,7 @@ function linkTwitch(res, stateData, Twitch, Command) {
 				if (e.tags.emotes)
 					await Twitch.getEmoteFromChat(e.parameters, e.tags.emotes, emotes);
 				const messageType = e.tags && e.tags['msg-id'];
-				if (messageType) {
+				if (messageType === '') {
 
 				}
 				// make dino say the message
@@ -213,7 +212,7 @@ function drawFrame(res, canvas) {
 	let dino = firstDino;
 	let i = 0;
 	while (dino) {
-		if (++i > dinoCount - maxDino)
+		if (++i > dinoCount - settings.maxDinoCount)
 			dino.render(canvas);
 		dino = dino.next;
 	}

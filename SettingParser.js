@@ -3,20 +3,37 @@ const parameters = [
 		name: 'joinChannel',
 		type: 'text',
 		require: true,
-		displayName: 'Channel to join',
-		description: '',
+		title: 'Channel to join',
+		description: null,
 		defaultValue: null,
 		placeholder: 'Channel Name',
 	},
 	{
-		name: 'maxDinoScale',
-		type: 'number',
-		require: false,
-		displayName: 'Max Dino size',
-		description: '',
-		defaultValue: 1,
-		min: 1,
-		max: 10,
+		type: 'section',
+		title: 'Dino Settings',
+		description: 'Settings for control Dino.',
+		items: [
+			{
+				name: 'maxDinoScale',
+				type: 'number',
+				require: false,
+				title: 'Max Dino size',
+				description: null,
+				defaultValue: 1,
+				min: 1,
+				max: 20,
+			},
+			{
+				name: 'maxDinoCount',
+				type: 'number',
+				require: false,
+				title: 'Max Dino count',
+				description: null,
+				defaultValue: 20,
+				min: 10,
+				max: 10000,
+			}
+		],
 	}
 ];
 
@@ -41,12 +58,24 @@ function parseSetting(queryString) {
 		return pair;
 	}));
 	for (const par of parameters) {
-		if (!(par.name in settings)) {
-			if (par.require) {
-				const errors = settings.error || (settings.error = []);
-				errors.push([par.type, par.displayName]);
+		if (par.type === 'section') {
+			for (const parI of par.items) {
+				if (!settings[parI.name]) {
+					if (parI.require) {
+						const errors = settings.error || (settings.error = []);
+						errors.push([parI.type, parI.title]);
+					}
+					settings[parI.name] = parI.defaultValue ? parI.defaultValue : null;
+				}
 			}
-			settings[par.name] = par.placeholder ? par.placeholder : null;
+		} else {
+			if (!settings[par.name]) {
+				if (par.require) {
+					const errors = settings.error || (settings.error = []);
+					errors.push([par.type, par.title]);
+				}
+				settings[par.name] = par.defaultValue ? par.defaultValue : null;
+			}
 		}
 	}
 	return settings;
@@ -61,30 +90,51 @@ function createSetting(parent) {
 	}
 
 	for (const par of parameters) {
-		const settingLabel = document.createElement('label');
-		const settingElement = document.createElement('input');
-		// for setting key name
-		settingElement.name = par.name;
-		switch (par.type) {
-			case 'text': {
-				settingElement.placeholder = par.placeholder;
-				break;
+		if (par.type === 'section') {
+			const title = document.createElement('h3');
+			title.className = 'sectionTitle';
+			title.textContent = par.title;
+			parent.appendChild(title);
+			if (par.description) {
+				const description = document.createElement('p');
+				description.className = 'sectionDescription';
+				description.textContent = par.description;
+				parent.appendChild(description);
 			}
-			case 'number': {
-				settingElement.min = par.min;
-				settingElement.max = par.max;
-				break;
-			}
-		}
-		settingLabel.for = settingElement.id = par.name;
-		settingLabel.textContent = par.displayName;
-		settingElement.type = par.type;
-		const value = settings && settings[par.name];
-		settingElement.value = value ? value : par.defaultValue;
-		settingElement.require = par.require;
-		settingElement.className = 'inputField focusGlow';
-
-		parent.appendChild(settingLabel);
-		parent.appendChild(settingElement);
+			const section = document.createElement('div');
+			section.className = 'section';
+			parent.appendChild(section);
+			for (const item of par.items)
+				createSettingInput(item, settings, section);
+		} else
+			createSettingInput(par, settings, parent);
 	}
+}
+
+function createSettingInput(par, settings, parent) {
+	const settingTitle = document.createElement('label');
+	const settingElement = document.createElement('input');
+	// for setting key name
+	settingElement.name = par.name;
+	switch (par.type) {
+		case 'text': {
+			settingElement.placeholder = par.placeholder;
+			break;
+		}
+		case 'number': {
+			settingElement.min = par.min;
+			settingElement.max = par.max;
+			break;
+		}
+	}
+	settingTitle.for = settingElement.id = par.name;
+	settingTitle.textContent = par.title;
+	settingElement.type = par.type;
+	const value = settings && settings[par.name];
+	settingElement.value = value ? value : par.defaultValue;
+	settingElement.require = par.require;
+	settingElement.className = 'inputField focusGlow';
+
+	parent.appendChild(settingTitle);
+	parent.appendChild(settingElement);
 }
