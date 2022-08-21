@@ -76,13 +76,13 @@ async function initVariable(res, stateData, Twitch) {
 
 async function initResource(res) {
 	const startTime = perf.now();
-	await loadImageSlice(res, 'res/dino.png');
+	await loadImageSlice(res, 'frontend/res/dino.png');
 
 	// setting page
 	const settingBtn = document.createElement('a');
 	settingBtn.className = 'settingBtn';
 	settingBtn.href = './settings.html';
-	const settingIcon = await require('res/setting_icon.svg');
+	const settingIcon = await require('frontend/res/setting_icon.svg');
 	settingBtn.appendChild(settingIcon);
 	document.body.appendChild(settingBtn);
 
@@ -820,8 +820,8 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 	}
 
 	// import
-	const Twitch = await require('backend/twitch');
-	const {Command} = await require('backend/messageParser');
+	const Twitch = await require('../backend/twitch');
+	const {Command} = await require('../backend/messageParser');
 	const res = {};
 	const stateData = {};
 	// get state, token, settings
