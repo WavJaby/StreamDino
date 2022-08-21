@@ -161,8 +161,8 @@ function createSetting(parent) {
 			};
 
 			// fill saved settings
-			const savedList = settings[par.id];
-			if (savedList.length > 0)
+			const savedList = settings && settings[par.id];
+			if (savedList && savedList.length > 0)
 				for (const value of savedList)
 					createListItem(par, list).value = value;
 			else

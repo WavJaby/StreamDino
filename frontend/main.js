@@ -820,8 +820,8 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 	}
 
 	// import
-	const Twitch = await require('../backend/twitch');
-	const {Command} = await require('../backend/messageParser');
+	const Twitch = await require('backend/twitch');
+	const {Command} = await require('backend/messageParser');
 	const res = {};
 	const stateData = {};
 	// get state, token, settings
