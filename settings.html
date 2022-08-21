@@ -4,109 +4,8 @@
 	<meta charset="UTF-8">
 	<title>Settings</title>
 	<link href="res/icon.png" rel="icon">
+	<link href="settings.css" rel="stylesheet">
 	<script src="SettingParser.js"></script>
-	<style>
-		html, body {
-			width: 100%;
-			height: 100%;
-			margin: 0;
-			padding: 0;
-		}
-
-		body {
-			background-color: #0E0E10;
-			color: white;
-			position: relative;
-			box-sizing: border-box;
-			padding: 20px;
-			font-family: Arial, monospace;
-		}
-
-		:root {
-			--text_input_bg: #FFFFFF33;
-			--text_input_height: 16px;
-			--button_bg: #9147ff;
-			--button_hover_bg: #772ce8;
-		}
-
-		.title {
-			font-size: 38px;
-			margin: 0 0 10px 0;
-		}
-
-		.section {
-			padding-left: 30px;
-		}
-
-		.sectionTitle {
-			font-size: 20px;
-			margin: 20px 0 10px 0;
-		}
-
-		.sectionDescription {
-			font-size: 16px;
-			margin: -5px 0 10px 0;
-		}
-
-		label {
-			font-size: 15px;
-			margin-bottom: 5px;
-			display: block;
-		}
-
-		input {
-			display: block;
-			margin-bottom: 10px;
-		}
-
-		.inputField {
-			background-color: var(--text_input_bg);
-			height: var(--text_input_height);
-			color: white;
-			border-radius: 5px;
-			padding: 5px 10px;
-		}
-
-		.button {
-			background-color: var(--button_bg);
-			color: white;
-			font-size: 14px;
-			user-select: none;
-			border-radius: 5px;
-			padding: 5px;
-		}
-
-		.button:hover {
-			background-color: var(--button_hover_bg);
-		}
-
-		.button:active {
-			background-color: var(--button_bg);
-		}
-
-		.focusGlow {
-			border: solid 2px rgba(0, 0, 0, 0);
-		}
-
-		.focusGlow:hover {
-			border-color: var(--text_input_bg);
-		}
-
-		.focusGlow:focus {
-			border-color: var(--button_hover_bg);
-			box-shadow: 0 0 0 rgba(0, 0, 0, 0.075) inset, 0 0 8px #772ce899;
-			outline: 0 none;
-		}
-
-		/*Auto fill bg color*/
-		input:-webkit-autofill,
-		input:-webkit-autofill:hover,
-		input:-webkit-autofill:focus,
-		input:-webkit-autofill:active {
-			-webkit-box-shadow: 0 0 0 30px #3E3E40 inset !important;
-			-webkit-text-fill-color: white !important;
-		}
-	</style>
 </head>
 <body>
 <div>
@@ -118,23 +17,19 @@
 	</form>
 	<script>
 		// init
-		let tokenData = localStorage.getItem('tokenData');
 		const form = document.getElementById('form');
 		const settingsFolder = document.getElementById('settings');
-
 		createSetting(settingsFolder);
 
 		/**
-		 * @param element {HTMLInputElement}
+		 * @param element {HTMLElement}
 		 */
 		function copyToClipboard(element) {
+			const inputs = document.querySelectorAll('#settings input');
+
 			const typesArray = [];
-			for (const child of settingsFolder.children) {
-				if (child.tagName === 'DIV' && child.className === 'section') {
-					for (const childI of child.children)
-						if (extractChildren(childI)) return;
-				} else if (extractChildren(child)) return;
-			}
+			for (const child of inputs)
+				if (extractChildren(child)) return;
 
 			function extractChildren(child) {
 				if (child.tagName === 'INPUT' && child.name) {
@@ -151,6 +46,7 @@
 			}
 
 			const text = `${new URL(form.action).href}?${typesArray.join('&')}`;
+			console.log(text);
 			navigator.clipboard.writeText(text).then(
 				function () {
 					alert('Copying to clipboard was successful!');

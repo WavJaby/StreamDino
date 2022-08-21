@@ -1,12 +1,24 @@
 const parameters = [
 	{
-		name: 'joinChannel',
-		type: 'text',
+		id: 'joinChannel',
+		type: 'string',
 		require: true,
 		title: 'Channel to join',
-		description: null,
+		description: 'Copy channel url to here',
 		defaultValue: null,
-		placeholder: 'Channel Name',
+		placeholder: 'https://www.twitch.tv/wavjaby',
+		selectAllOnClick: true,
+		width: 300,
+	},
+	{
+		id: 'ignoreUserName',
+		type: 'string[]',
+		require: false,
+		title: 'Ignore user list',
+		description: 'List for user you dont want to show',
+		defaultValue: null,
+		placeholder: 'Username',
+		width: 150,
 	},
 	{
 		type: 'section',
@@ -14,8 +26,8 @@ const parameters = [
 		description: 'Settings for control Dino.',
 		items: [
 			{
-				name: 'maxDinoScale',
-				type: 'number',
+				id: 'maxDinoScale',
+				type: 'int',
 				require: false,
 				title: 'Max Dino size',
 				description: null,
@@ -24,8 +36,8 @@ const parameters = [
 				max: 20,
 			},
 			{
-				name: 'maxDinoCount',
-				type: 'number',
+				id: 'maxDinoCount',
+				type: 'int',
 				require: false,
 				title: 'Max Dino count',
 				description: null,
@@ -38,50 +50,69 @@ const parameters = [
 ];
 
 function parseSetting(queryString) {
-	const settings = Object.fromEntries(queryString.split('&').map(i => {
-		const pair = i.split('=').map(decodeURIComponent);
-		const value = pair[1];
-		let isNum = true, isFloat = true;
-		for (let j = 0; j < value.length; j++) {
-			const chr = value.charCodeAt(j);
-			if (isNum && (chr < 0x30 || chr > 0x39) && chr !== 0x2B && chr !== 0x2D)
-				isNum = false;
-			else if (isFloat && chr !== 0x2E && chr !== 0x45 && chr !== 0x65) {
-				isFloat = false;
-				break;
-			}
+	const types = {};
+	flattenType(parameters, types);
+	const settings = {};
+	queryString.split('&').forEach(i => {
+		const pair = i.split('=');
+		const key = decodeURIComponent(pair[0]);
+		let value = decodeURIComponent(pair[1]);
+		const type = types[key];
+		if (!type) return;
+		if (!value || value.length === 0) {
+			if (type.endsWith('[]') && !(key in settings)) settings[key] = [];
+			return;
 		}
-		if (isNum)
-			pair[1] = parseInt(value);
-		else if (isFloat)
-			pair[1] = parseFloat(value);
-		return pair;
-	}));
+
+		if (type.startsWith('int'))
+			value = parseInt(value);
+		else if (type.startsWith('float'))
+			value = parseFloat(value);
+
+		// array
+		if (type.endsWith('[]')) {
+			const valueIn = settings[key];
+			if (valueIn)
+				valueIn.push(value);
+			else
+				settings[key] = [value];
+		}
+		// value
+		else
+			settings[key] = value;
+	});
 	for (const par of parameters) {
 		if (par.type === 'section') {
-			for (const parI of par.items) {
-				if (!settings[parI.name]) {
-					if (parI.require) {
-						const errors = settings.error || (settings.error = []);
-						errors.push([parI.type, parI.title]);
-					}
-					settings[parI.name] = parI.defaultValue ? parI.defaultValue : null;
-				}
+			for (const parI of par.items)
+				processValue(parI);
+		} else
+			processValue(par);
+	}
+
+	function processValue(par) {
+		if (!settings[par.id]) {
+			if (par.require) {
+				const errors = settings.error || (settings.error = []);
+				errors.push([par.type, par.title]);
 			}
-		} else {
-			if (!settings[par.name]) {
-				if (par.require) {
-					const errors = settings.error || (settings.error = []);
-					errors.push([par.type, par.title]);
-				}
-				settings[par.name] = par.defaultValue ? par.defaultValue : null;
-			}
+			settings[par.id] = par.defaultValue ? par.defaultValue : null;
 		}
 	}
+
 	return settings;
 }
 
+function flattenType(parameters, output) {
+	for (const par of parameters) {
+		if (par.type === 'section')
+			flattenType(par.items, output);
+		else
+			output[par.id] = par.type;
+	}
+}
+
 function createSetting(parent) {
+	let tokenData = localStorage.getItem('tokenData');
 	let settings;
 	if (tokenData) {
 		tokenData = JSON.parse(tokenData);
@@ -105,36 +136,135 @@ function createSetting(parent) {
 			section.className = 'section';
 			parent.appendChild(section);
 			for (const item of par.items)
-				createSettingInput(item, settings, section);
+				createSettingField(item, section);
 		} else
-			createSettingInput(par, settings, parent);
+			createSettingField(par, parent);
 	}
-}
 
-function createSettingInput(par, settings, parent) {
-	const settingTitle = document.createElement('label');
-	const settingElement = document.createElement('input');
-	// for setting key name
-	settingElement.name = par.name;
-	switch (par.type) {
-		case 'text': {
-			settingElement.placeholder = par.placeholder;
-			break;
+	function createSettingField(par, parent) {
+		createFieldTitle(par, parent);
+		// array
+		if (par.type.endsWith('[]')) {
+			const list = document.createElement('div');
+			list.className = 'list';
+			const add = document.createElement('button');
+			add.className = 'addButton squareButton focusGlow';
+			add.type = 'button';
+			add.innerHTML = `
+				<svg viewBox="0 0 32 32">
+					<rect x="1" y="12" rx="2" ry="2" width="30" height="8" style="fill:white"/>
+					<rect x="12" y="1" rx="2" ry="2" width="8" height="30" style="fill:white"/>
+				</svg>
+			`;
+			add.onclick = function () {
+				createListItem(par, list);
+			};
+
+			// fill saved settings
+			const savedList = settings[par.id];
+			if (savedList.length > 0)
+				for (const value of savedList)
+					createListItem(par, list).value = value;
+			else
+				createListItem(par, list);
+			parent.appendChild(list);
+			parent.appendChild(add);
 		}
-		case 'number': {
-			settingElement.min = par.min;
-			settingElement.max = par.max;
-			break;
-		}
+		// normal field
+		else
+			createInputField(par, parent);
+		// add if description
+		if (par.description)
+			createFieldDescription(par, parent);
 	}
-	settingTitle.for = settingElement.id = par.name;
-	settingTitle.textContent = par.title;
-	settingElement.type = par.type;
-	const value = settings && settings[par.name];
-	settingElement.value = value ? value : par.defaultValue;
-	settingElement.require = par.require;
-	settingElement.className = 'inputField focusGlow';
 
-	parent.appendChild(settingTitle);
-	parent.appendChild(settingElement);
+	function createListItem(par, list) {
+		const item = document.createElement('div');
+		item.className = 'listItem';
+		const remove = document.createElement('button');
+		remove.className = 'removeButton squareButton';
+		remove.type = 'button';
+		remove.innerHTML = `
+			<svg viewBox="0 0 32 32">
+				<g transform="rotate(45 16 16)">
+					<rect x="1" y="14" rx="2" ry="2" width="30" height="4" style="fill:white"/>
+					<rect x="14" y="1" rx="2" ry="2" width="4" height="30" style="fill:white"/>
+				</g>
+			</svg>
+		`;
+		const field = createInputField(par, item);
+		remove.onclick = function () {
+			if (list.children.length === 1)
+				field.value = '';
+			else
+				list.removeChild(item);
+		}
+		item.appendChild(remove);
+		list.appendChild(item);
+		return field;
+	}
+
+	function createFieldTitle(par, parent) {
+		const settingTitle = document.createElement('label');
+		settingTitle.className = 'settingTitle';
+		settingTitle.for = par.id;
+		settingTitle.textContent = par.title;
+		parent.appendChild(settingTitle);
+	}
+
+	// input field
+	function createInputField(par, parent) {
+		const settingElement = document.createElement('input');
+		settingElement.className = 'inputField focusGlow';
+
+		const isArray = par.type.endsWith('[]');
+		const type = isArray
+			? par.type.slice(0, par.type.length - 2)
+			: par.type;
+		// for setting key name
+		switch (type) {
+			case 'string': {
+				settingElement.type = 'text';
+				settingElement.placeholder = par.placeholder;
+				break;
+			}
+			case 'int': {
+				settingElement.type = 'number';
+				settingElement.step = par.step || '1';
+				settingElement.min = par.min;
+				settingElement.max = par.max;
+				break;
+			}
+			case 'float': {
+				settingElement.type = 'number';
+				settingElement.step = par.step || '0.01';
+				settingElement.min = par.min;
+				settingElement.max = par.max;
+				break;
+			}
+		}
+		if (par.width)
+			settingElement.style.width = par.width + 'px';
+		settingElement.name = settingElement.id = par.id;
+		if (!isArray) {
+			const value = settings && settings[par.id];
+			settingElement.value = value ? value : par.defaultValue;
+		}
+		settingElement.required = par.require;
+
+		// select all text on click
+		if (par.selectAllOnClick)
+			settingElement.onfocus = function () {
+				this.setSelectionRange(0, this.value.length);
+			}
+		parent.appendChild(settingElement);
+		return settingElement;
+	}
+
+	function createFieldDescription(par, parent) {
+		const description = document.createElement('p');
+		description.className = 'settingDescription';
+		description.textContent = par.description;
+		parent.appendChild(description);
+	}
 }

@@ -89,9 +89,10 @@ function onClose() {
 	client.removeEventListener('close', onClose);
 	client.removeEventListener('message', onMessage);
 	client = null;
+	clearInterval(retryTimer);
 
 	// reconnect
-	const reconnectTime = 1000;
+	const reconnectTime = 5000;
 	console.log(`Reconnect in ${reconnectTime}sec`);
 	setTimeout(startListen, reconnectTime);
 }

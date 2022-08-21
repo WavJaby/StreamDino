@@ -66,6 +66,12 @@ async function initVariable(res, stateData, Twitch) {
 	localStorage.setItem('tokenData', JSON.stringify(hashString));
 	stateData.accessToken = hashString.access_token;
 	settings = parseSetting(hashString.state);
+
+	if (settings.joinChannel) {
+		const path = new URL(settings.joinChannel).pathname.slice(1);
+		const end = path.indexOf('/');
+		settings.joinChannel = end !== -1 ? path.slice(0, end) : path;
+	}
 }
 
 async function initResource(res) {
@@ -124,7 +130,11 @@ function linkTwitch(res, stateData, Twitch, Command) {
 					color: e.tags.color,
 					displayName: e.tags['display-name'],
 					userID: e.tags['user-id'],
+					name: e.source.nick,
 				};
+
+				if (settings.ignoreUserName.indexOf(userData.name) !== -1)
+					return;
 
 				// give random color if user don't have
 				if (!userData.color)
@@ -511,17 +521,18 @@ function Dialog(res) {
 }
 
 function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
-	const cullWidth = 4, cullXLeft = -2, cullYBottom = -5, cullYTop = -4;
+	const cullLeft = 2, cullRight = 2, cullBottom = 5, cullTop = 4;
+	const borderWidth = 1;
 	const Random = new RNG(seed);
 	const speed = 10 * dinoScale;
 	const dialog = new Dialog(res);
 
-	const marginX = 10;
-	const marginY = 3;
-	const fontSize = 12;
-	const font = `${fontSize}px ${fontName}`;
+	const nameTagMarginX = 10;
+	const nameTagMarginY = 3;
+	const nameFontSize = 12;
+	const font = `${nameFontSize}px ${fontName}`;
 	const nameWidth = getTextWidth(name, font);
-	const textHeight = fontSize * 1.25;
+	const nameTextHeight = nameFontSize * 1.25;
 
 	// for render
 	let dinoRes = [], dinoCanvas;
@@ -547,18 +558,51 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 		dinoRes = new Array(dinoNormal.length + dinoMirror.length);
 		for (let i = 0; i < dinoRes.length; i++) {
 			const cache = i < dinoNormal.length ? dinoNormal[i] : dinoMirror[i - dinoNormal.length];
-			const cacheCanvas = dinoRes[i] = createCanvas(cache.width, cache.height);
-			cacheCanvas.drawImage(cache, 0, 0, cache.width, cache.height, 0, 0, cache.width, cache.height);
+			const borderTotalWidth = borderWidth * 2;
+			const width = cache.width * dinoScale + borderTotalWidth;
+			const height = cache.height * dinoScale + borderTotalWidth;
+			const cacheCanvas = dinoRes[i] = createCanvas(width, height);
+			// cacheCanvas.fillStyle = 'white'
+			// cacheCanvas.fillRect(0, 0, cacheCanvas.canvas.width, cacheCanvas.canvas.height);
+			cacheCanvas.drawImage(cache, cullLeft, cullTop,
+				cache.width - (cullLeft + cullRight), cache.height - (cullTop + cullBottom),
+				borderWidth, borderWidth, width - borderTotalWidth, height - borderTotalWidth);
 
 			// change dino color
-			const imgData = cacheCanvas.getImageData(0, 0, cache.width, cache.height);
+			const border = [];
+			const imgData = cacheCanvas.getImageData(0, 0, width, height);
 			for (let i = 0; i < imgData.data.length; i += 4) {
+				const x = (i / 4) % width;
+				const y = (i / 4 / width) | 0;
+				let left, right, top, bottom;
+				if (imgData.data[i + 3] === 0 && (
+					(left = x + 1 < width && imgData.data[i + 3 + 4] > 0) ||
+					(right = x - 1 >= 0 && imgData.data[i + 3 - 4] > 0) ||
+					(top = y - 1 >= 0 && imgData.data[i + 3 - width * 4] > 0) ||
+					(bottom = y + 1 < height && imgData.data[i + 3 + width * 4] > 0)
+				)) {
+					if (left || right)
+						for (let j = 0; j < borderWidth; j++)
+							border.push((left ? i - (borderWidth * 4 - 4) : i) + j * 4);
+					else if (top || bottom)
+						for (let j = 0; j < borderWidth; j++)
+							border.push((top ? i : (i - (borderWidth - 1) * (width * 4))) + j * (width * 4));
+					continue;
+				}
+
 				if (imgData.data[i + 3] === 0 || imgData.data[i] > 0 || imgData.data[i + 1] > 0 || imgData.data[i + 1] > 0)
 					continue;
 				imgData.data[i] = (dinoColor & 0xFF0000) >> 16;
 				imgData.data[i + 1] = (dinoColor & 0xFF00) >> 8;
 				imgData.data[i + 2] = dinoColor & 0xFF;
 			}
+			for (const i of border) {
+				imgData.data[i] = 0xFF;
+				imgData.data[i + 1] = 0xFF;
+				imgData.data[i + 2] = 0xFF;
+				imgData.data[i + 3] = 0xFF;
+			}
+
 			cacheCanvas.putImageData(imgData, 0, 0);
 		}
 		// console.log('update dino state');
@@ -588,8 +632,8 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 	function setState(index) {
 		const state = dinoRes[facingNormal ? index : (4 + index)];
 		dinoCanvas = state.canvas;
-		textureW = dinoCanvas.width * dinoScale;
-		textureH = dinoCanvas.height * dinoScale;
+		textureW = dinoCanvas.width;
+		textureH = dinoCanvas.height;
 	}
 
 	/**
@@ -619,8 +663,8 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 			vx = 0;
 			lastState = 2;
 			setState(0);
-		} else if (x > canvasWidth - textureW + cullWidth * dinoScale) {
-			x = canvasWidth - textureW + cullWidth * dinoScale;
+		} else if (x > canvasWidth - textureW) {
+			x = canvasWidth - textureW;
 			// stop moving
 			vx = 0;
 			lastState = 1;
@@ -724,36 +768,36 @@ function Dino(initX, initY, dinoScale, name, initColor, fontName, res, seed) {
 			setState(0);
 		}
 
-		const finalY = canvasHeight - textureH - 1 - (y + (cullYBottom + cullYTop) * dinoScale);
+		const finalY = canvasHeight - textureH - y;
 
 		// render dialog
 		if (dialogCloseDelay !== -1 && frameCount - lastDialogFrame > dialogCloseDelay) {
 			dialogCloseDelay = -1;
 			dialog.setText(null, null);
 		}
-		dialog.setPosition(x + (facingNormal ? (textureW - cullWidth * dinoScale) : 0), finalY, facingNormal);
+		dialog.setPosition(x + (facingNormal ? textureW : 0), finalY, facingNormal);
 		const location = dialog.render(canvas);
 
 		// render name
 		canvas.font = font;
-		const bgHeight = textHeight + marginY * 2;
+		const bgHeight = nameTextHeight + nameTagMarginY * 2;
 		const r = bgHeight * 0.5;
 		if (location === null) {
-			const finalX = (x + cullXLeft * dinoScale) + (textureW - nameWidth) * 0.5;
+			const finalX = x + (textureW - nameWidth) * 0.5;
 			canvas.fillStyle = '#000000E0';
-			canvas.roundRect(finalX, finalY - textHeight - marginY, getTextWidth(name, font) + marginX * 2, bgHeight, r).fill();
+			canvas.roundRect(finalX, finalY - nameTextHeight - nameTagMarginY, getTextWidth(name, font) + nameTagMarginX * 2, bgHeight, r).fill();
 			canvas.fillStyle = 'white';
-			canvas.fillText(name, finalX + marginX, finalY - textHeight + fontSize);
+			canvas.fillText(name, finalX + nameTagMarginX, finalY - nameTextHeight + nameFontSize);
 		} else {
 			const finalX = location[0] + 10;
 			canvas.fillStyle = '#000000E0';
-			canvas.roundRect(finalX, location[1] - fontSize - marginY, getTextWidth(name, font) + marginX * 2, bgHeight, r).fill();
+			canvas.roundRect(finalX, location[1] - nameFontSize - nameTagMarginY, getTextWidth(name, font) + nameTagMarginX * 2, bgHeight, r).fill();
 			canvas.fillStyle = 'white';
-			canvas.fillText(name, finalX + marginX, location[1]);
+			canvas.fillText(name, finalX + nameTagMarginX, location[1]);
 		}
 
 		// render dino
-		canvas.drawImage(dinoCanvas, 0, 0, dinoCanvas.width, dinoCanvas.height, x + cullXLeft * dinoScale, finalY + cullYTop * dinoScale, textureW, textureH);
+		canvas.drawImage(dinoCanvas, 0, 0, textureW, textureH, x, finalY, textureW, textureH);
 	}
 
 	// init
